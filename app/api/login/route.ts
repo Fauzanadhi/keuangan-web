@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   if (typeof username !== "string" || typeof password !== "string" || !username || !password) return fail();
 
   const admin = createClient(url, service, { auth: { persistSession: false } });
-  const { data: prof } = await admin.from("profiles").select("email").eq("username", username.trim().toLowerCase()).maybeSingle();
+  const { data: prof } = await admin.from("profiles").select("email").eq("username_lower", username.trim().replace(/\s+/g, " ").toLowerCase()).maybeSingle();
   if (!prof) return fail();
 
   const client = createClient(url, anon, { auth: { persistSession: false } });

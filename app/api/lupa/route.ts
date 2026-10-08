@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   let email = identifier.trim();
   if (!email.includes("@")) {
     const admin = createClient(url, service, { auth: { persistSession: false } });
-    const { data } = await admin.from("profiles").select("email").eq("username", email.toLowerCase()).maybeSingle();
+    const { data } = await admin.from("profiles").select("email").eq("username_lower", email.replace(/\s+/g, " ").toLowerCase()).maybeSingle();
     if (!data) return NextResponse.json({ ok: true });
     email = data.email;
   }

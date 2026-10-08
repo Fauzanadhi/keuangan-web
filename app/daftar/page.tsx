@@ -13,8 +13,8 @@ export default function Daftar() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setMsg("");
-    const username = f.username.trim().toLowerCase();
-    if (!/^[a-z0-9_]{3,20}$/.test(username)) return setMsg("Username 3-20 karakter: huruf kecil, angka, atau garis bawah (_).");
+    const username = f.username.trim().replace(/\s+/g, " ");
+    if (username.length < 3 || username.length > 20 || !/^[A-Za-z0-9_]+( [A-Za-z0-9_]+)*$/.test(username)) return setMsg("Username 3-20 karakter: huruf, angka, spasi, atau garis bawah (_).");
     if (f.password.length < 6) return setMsg("Kata sandi minimal 6 karakter.");
     if (f.password !== f.confirm) return setMsg("Konfirmasi kata sandi tidak sama.");
     setBusy(true);
@@ -34,7 +34,7 @@ export default function Daftar() {
       <main className="wrap">
         <div className="card login">
           <h1>Cek Gmail kamu</h1>
-          <p>Kami mengirim tautan konfirmasi ke {f.email.trim()}. Klik tautannya, lalu masuk dengan username <b>{f.username.trim().toLowerCase()}</b>.</p>
+          <p>Kami mengirim tautan konfirmasi ke {f.email.trim()}. Klik tautannya, lalu masuk dengan username <b>{f.username.trim().replace(/\s+/g, " ")}</b>.</p>
           <a className="btn" style={{ display: "block", textAlign: "center", textDecoration: "none" }} href="/">Ke halaman masuk</a>
         </div>
       </main>
@@ -47,7 +47,7 @@ export default function Daftar() {
         <p>Isi data di bawah untuk mulai mencatat keuanganmu.</p>
         <div className="field">
           <label htmlFor="u">Username</label>
-          <input id="u" required autoComplete="username" placeholder="mis. fauzan" value={f.username} onChange={set("username")} />
+          <input id="u" required autoComplete="username" placeholder="mis. Fauzan Adhi" value={f.username} onChange={set("username")} />
         </div>
         <div className="field">
           <label htmlFor="e">Gmail</label>
