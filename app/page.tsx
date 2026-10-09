@@ -5,11 +5,11 @@ import type { Session } from "@supabase/supabase-js";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { isRecovery, linkExpired, supabase } from "@/lib/supabase";
 
-type Tx = { id: string; date: string; type: "in" | "out" | "transfer"; amount: number; category: string; note: string | null; wallet_id: string | null; wallet_to_id: string | null };
+type Tx = { id: string; date: string; type: "in" | "out" | "transfer"; amount: number; category: string; note: string | null; wallet_id: string | null; wallet_to_id: string | null; wishlist_id: string | null };
 type Budget = { category: string; amount: number; kind: "limit" | "target"; month: number; year: number };
-type Wish = { id: string; name: string; target_amount: number };
+type Wish = { id: string; name: string; target_amount: number; completed_at: string | null; completed_amount: number | null };
 
-const IN_CATS = ["Deposit", "Gaji", "Lainnya"];
+const DEFAULT_IN_CATS = ["Deposit", "Gaji", "Lainnya"];
 const DEFAULT_OUT_CATS = ["Jajan", "Jalan", "Kebutuhan", "Tanggungan", "Infaq", "Tabungan", "Investasi", "Lainnya"];
 const MONTH_NAMES = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const COLORS = ["#2dd4a7", "#f59bb0", "#4a7bd8", "#9c98f2", "#fdbe2d", "#e03e6b", "#8a8fa8"];
@@ -41,21 +41,20 @@ const budgetRange = (month: number, year: number) => ({
 });
 
 type Wallet = { id: string; name: string; kind: "cash" | "emoney" | "bank" | "investment"; archived_at: string | null };
-const KINDS = { cash: "Tunai", emoney: "E-money", bank: "Rekening", investment: "Investasi" } as const;
+const KINDS = { cash: "Tunai", emoney: "E-money", bank: "Rekening" } as const;
 
 const NAV_GROUPS = [
   { label: "Utama", items: [
     { id: "beranda", label: "Beranda", icon: "home" },
   ] },
   { label: "", items: [
-    { id: "kelola-uang", label: "Kelola Uang", icon: "wallet" },
+    { id: "kelola-uang", label: "Transaksi", icon: "list" },
   ] },
-  { label: "Laporan", items: [
+  { label: "", items: [
     { id: "statistik", label: "Statistik", icon: "chart" },
   ] },
   { label: "Akun", items: [
-    { id: "pengaturan", label: "Pengaturan", icon: "settings" },
-    { id: "keluar", label: "Keluar", icon: "logout", action: "logout" },
+    { id: "pengaturan", label: "Kategori", icon: "category" },
   ] },
 ];
 
@@ -67,7 +66,9 @@ function Icon({ n }: { n: string }) {
     chart: "M4 20V10M10 20V4M16 20v-7M22 20H2",
     search: "M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-4.3-4.3",
     budget: "M12 3v18M17 7H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6",
+    category: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
     settings: "M12 8a4 4 0 100 8 4 4 0 000-8zM19.4 15a1.7 1.7 0 00.3 1.9l.1.1-1.7 2.9-.2-.1a1.7 1.7 0 00-1.8.2l-.1.1h-3.4l-.1-.2a1.7 1.7 0 00-1.5-1.1h-.2l-2.9-1.7.1-.2a1.7 1.7 0 00-.2-1.8l-.1-.1v-3.4l.2-.1a1.7 1.7 0 001.1-1.5v-.2l1.7-2.9.2.1a1.7 1.7 0 001.8-.2l.1-.1h3.4l.1.2a1.7 1.7 0 001.5 1.1h.2l2.9 1.7-.1.2a1.7 1.7 0 00.2 1.8l.1.1v3.4z",
+    account: "M20 21a8 8 0 00-16 0M12 13a5 5 0 100-10 5 5 0 000 10z",
     logout: "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
     menu: "M4 6h16M4 12h16M4 18h16",
     wishlist: "M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 00-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 00-.1-7.8z",
@@ -125,18 +126,41 @@ function NewPassword({ onDone }: { onDone: () => void }) {
         <h1>Kata sandi baru</h1>
         <p>Buat kata sandi baru untuk akunmu.</p>
         <div className="field">
-          <label htmlFor="np">Kata sandi baru</label>
-          <input id="np" type="password" required autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} />
+          <PasswordField id="np" label="Kata sandi baru" autoComplete="new-password" value={pw} onChange={setPw} required />
         </div>
         <div className="field">
-          <label htmlFor="nc">Konfirmasi kata sandi</label>
-          <input id="nc" type="password" required autoComplete="new-password" value={cf} onChange={(e) => setCf(e.target.value)} />
+          <PasswordField id="nc" label="Konfirmasi kata sandi" autoComplete="new-password" value={cf} onChange={setCf} required />
         </div>
         {msg && <p className="err" role="alert">{msg}</p>}
         <button className="btn" disabled={busy}>{busy ? "Menyimpan..." : "Simpan kata sandi"}</button>
       </form>
     </main>
   );
+}
+
+function PasswordField({
+  id, label, value, onChange, autoComplete, required = false, minLength,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete: string;
+  required?: boolean;
+  minLength?: number;
+}) {
+  const [visible, setVisible] = useState(false);
+  return <>
+    <label htmlFor={id}>{label}</label>
+    <div className="password-input-wrap">
+      <input id={id} type={visible ? "text" : "password"} required={required} minLength={minLength} autoComplete={autoComplete} value={value} onChange={(e) => onChange(e.target.value)} />
+      <button className="password-visibility" type="button" onClick={() => setVisible((show) => !show)} aria-label={visible ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"} aria-pressed={visible}>
+        {visible
+          ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8" /><path d="M9.9 5.2A10.8 10.8 0 0112 5c5 0 8.5 4.2 9.5 7-.4 1.2-1.2 2.4-2.2 3.4M6.2 6.2C4.2 7.5 2.9 9.7 2.5 12c.9 2.8 4.5 7 9.5 7 1.1 0 2.1-.2 3-.5" /></svg>
+          : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7z" /><circle cx="12" cy="12" r="3" /></svg>}
+      </button>
+    </div>
+  </>;
 }
 
 function Login() {
@@ -176,8 +200,7 @@ function Login() {
           <input id="id" required autoComplete="username" value={id} onChange={(e) => setId(e.target.value)} />
         </div>
         <div className="field">
-          <label htmlFor="pw">Kata sandi</label>
-          <input id="pw" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PasswordField id="pw" label="Kata sandi" autoComplete="current-password" value={password} onChange={setPassword} required />
         </div>
         {msg && <p className="err" role="alert">{msg}</p>}
         <button className="btn" disabled={busy}>{busy ? "Masuk..." : "Masuk"}</button>
@@ -193,24 +216,29 @@ function Dashboard({ session }: { session: Session }) {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [month, setMonth] = useState(todayStr().slice(0, 7));
+  const [reportScale, setReportScale] = useState<"monthly" | "yearly">("monthly");
   const [search, setSearch] = useState("");
+  const [transactionCategoryFilter, setTransactionCategoryFilter] = useState("all");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<string[]>(DEFAULT_OUT_CATS);
+  const [incomeCategories, setIncomeCategories] = useState<string[]>(DEFAULT_IN_CATS);
   const [newExpenseCategory, setNewExpenseCategory] = useState("");
+  const [newIncomeCategory, setNewIncomeCategory] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [walletId, setWalletId] = useState("");
-  const [walletToId, setWalletToId] = useState("");
-  const [newWallet, setNewWallet] = useState<{ name: string; kind: Wallet["kind"] }>({ name: "", kind: "cash" });
+  const [transactionWishId, setTransactionWishId] = useState("");
+  const [newWallet, setNewWallet] = useState<{ name: string; kind: keyof typeof KINDS }>({ name: "", kind: "cash" });
   const [nav, setNav] = useState("beranda");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [more, setMore] = useState(false);
   const [username, setUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const [budgetCategory, setBudgetCategory] = useState(DEFAULT_OUT_CATS[0]);
   const [budgetMonth, setBudgetMonth] = useState(new Date().getMonth() + 1);
   const [budgetYear, setBudgetYear] = useState(new Date().getFullYear());
@@ -228,19 +256,28 @@ function Dashboard({ session }: { session: Session }) {
   const [savingWish, setSavingWish] = useState(false);
 
   // form
-  const [type, setType] = useState<"in" | "out" | "transfer">("out");
+  const [type, setType] = useState<"in" | "out">("out");
   const [date, setDate] = useState(todayStr());
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState(DEFAULT_OUT_CATS[0]);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    setDarkMode(localStorage.getItem("keuangan-theme") === "dark");
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkMode ? "dark" : "light";
+    localStorage.setItem("keuangan-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
+
   const load = useCallback(async () => {
     const all: Tx[] = [];
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase
         .from("transactions")
-        .select("id,date,type,amount,category,note,wallet_id,wallet_to_id")
+        .select("id,date,type,amount,category,note,wallet_id,wallet_to_id,wishlist_id")
         .order("date", { ascending: false })
         .order("created_at", { ascending: false })
         .range(from, from + 999);
@@ -265,47 +302,67 @@ function Dashboard({ session }: { session: Session }) {
     } else {
       setExpenseCategories(cats.data.map((item) => item.category));
     }
+    const incomeCats = await supabase.from("income_categories").select("category").order("category");
+    if (incomeCats.error) setError(incomeCats.error.message);
+    else if (!incomeCats.data?.length) {
+      const { error: seedError } = await supabase.from("income_categories").insert(
+        DEFAULT_IN_CATS.map((category) => ({ user_id: session.user.id, category })),
+      );
+      if (seedError) setError(seedError.message);
+      else setIncomeCategories(DEFAULT_IN_CATS);
+    } else {
+      setIncomeCategories(incomeCats.data.map((item) => item.category));
+    }
     const b = await supabase.from("category_budgets").select("category,amount,kind,month,year");
     if (b.error) setError(b.error.message);
     else setBudgets((b.data ?? []).map((x) => ({ ...x, amount: Number(x.amount) }) as Budget));
-    const wish = await supabase.from("wish_list").select("id,name,target_amount").order("created_at", { ascending: false });
+    const wish = await supabase.from("wish_list").select("id,name,target_amount,completed_at,completed_amount").order("created_at", { ascending: false });
     if (wish.error) setError(wish.error.message);
-    else setWishes((wish.data ?? []).map((x) => ({ ...x, target_amount: Number(x.target_amount) })) as Wish[]);
+    else setWishes((wish.data ?? []).map((x) => ({ ...x, target_amount: Number(x.target_amount), completed_amount: x.completed_amount === null ? null : Number(x.completed_amount) })) as Wish[]);
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const months = useMemo(() => {
-    const s = new Set(txs.map((t) => t.date.slice(0, 7)));
-    s.add(todayStr().slice(0, 7));
-    return Array.from(s).sort().reverse();
-  }, [txs]);
-
-  const investmentWalletIds = useMemo(
-    () => new Set(wallets.filter((wallet) => wallet.kind === "investment").map((wallet) => wallet.id)),
-    [wallets],
-  );
-  const transferMovesIntoInvestment = (sourceWalletId: string | null, targetWalletId: string | null) =>
-    !!targetWalletId && investmentWalletIds.has(targetWalletId) &&
-    !(sourceWalletId && investmentWalletIds.has(sourceWalletId));
-  const transferMovesFromInvestment = (sourceWalletId: string | null, targetWalletId: string | null) =>
-    !!sourceWalletId && investmentWalletIds.has(sourceWalletId) &&
-    !(targetWalletId && investmentWalletIds.has(targetWalletId));
-  const isTransferToInvestment = (transaction: Tx) =>
-    transaction.type === "transfer" && transferMovesIntoInvestment(transaction.wallet_id, transaction.wallet_to_id);
-  const isTransferFromInvestment = (transaction: Tx) =>
-    transaction.type === "transfer" && transferMovesFromInvestment(transaction.wallet_id, transaction.wallet_to_id);
-  const transactionExpenseCategories = expenseCategories.filter((item) => item.toLowerCase() !== "investasi");
+  const transactionCategory = (transaction: Tx) => transaction.type === "transfer" ? "Transfer dompet (riwayat)" : transaction.category;
   const expenseForCategoryInRange = (expenseCategory: string, from: string, to: string) =>
     txs.filter((transaction) =>
       transaction.date >= from && transaction.date <= to &&
-      ((expenseCategory !== "Investasi" && transaction.type === "out" && transaction.category === expenseCategory) ||
-        (expenseCategory === "Investasi" && isTransferToInvestment(transaction))),
+      transaction.type === "out" && transaction.category === expenseCategory,
     ).reduce((total, transaction) => total + transaction.amount, 0);
   const monthTxs = useMemo(() => txs.filter((t) => t.date.startsWith(month)), [txs, month]);
-  const inM = monthTxs.filter((t) => t.type === "in" || isTransferFromInvestment(t)).reduce((a, t) => a + t.amount, 0);
-  const outM = monthTxs.filter((t) => t.type === "out" || isTransferToInvestment(t)).reduce((a, t) => a + t.amount, 0);
+  const inM = monthTxs.filter((t) => t.type === "in").reduce((a, t) => a + t.amount, 0);
+  const outM = monthTxs.filter((t) => t.type === "out").reduce((a, t) => a + t.amount, 0);
+  const transactionCategories = useMemo(
+    () => Array.from(new Set(txs.map(transactionCategory))).sort((a, b) => a.localeCompare(b, "id")),
+    [txs, wallets],
+  );
+  const transactionYears = useMemo(
+    () => Array.from(new Set([new Date().getFullYear(), ...txs.map((t) => Number(t.date.slice(0, 4)))]))
+      .sort((a, b) => b - a),
+    [txs],
+  );
+  const transactionPeriodRows = useMemo(
+    () => monthTxs.filter((transaction) => transactionCategoryFilter === "all" || transactionCategory(transaction) === transactionCategoryFilter),
+    [monthTxs, transactionCategoryFilter, wallets],
+  );
+  const transactionRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q
+      ? transactionPeriodRows.filter((t) => {
+          const walletNames = [t.wallet_id, t.wallet_to_id]
+            .map((id) => wallets.find((wallet) => wallet.id === id)?.name ?? "")
+            .join(" ");
+          return `${transactionCategory(t)} ${t.note ?? ""} ${t.amount} ${t.date} ${walletNames}`.toLowerCase().includes(q);
+        })
+      : transactionPeriodRows;
+  }, [transactionPeriodRows, search, wallets]);
+  const transactionIncomeTotal = transactionPeriodRows
+    .filter((transaction) => transaction.type === "in")
+    .reduce((total, transaction) => total + transaction.amount, 0);
+  const transactionExpenseTotal = transactionPeriodRows
+    .filter((transaction) => transaction.type === "out")
+    .reduce((total, transaction) => total + transaction.amount, 0);
 
   const walletBal = useMemo(() => {
     const sum = (walletId: string) => txs.reduce((balance, t) => {
@@ -317,20 +374,16 @@ function Dashboard({ session }: { session: Session }) {
       if (t.wallet_id !== walletId) return balance;
       return balance + (t.type === "in" ? t.amount : -t.amount);
     }, 0);
-    const rows = wallets.map((w) => ({ id: w.id, name: w.name, kind: KINDS[w.kind] as string, investment: w.kind === "investment", archived: !!w.archived_at, bal: sum(w.id) }));
+    const rows = wallets.map((w) => ({ id: w.id, name: w.name, kind: w.kind === "investment" ? "Dompet" : KINDS[w.kind], archived: !!w.archived_at, bal: sum(w.id) }));
     const none = txs.filter((t) => t.type !== "transfer" && !t.wallet_id).reduce((balance, t) => balance + (t.type === "in" ? t.amount : -t.amount), 0);
-    return none !== 0 || !rows.length ? [...rows, { id: "none", name: "Tanpa dompet", kind: "Belum dikelompokkan", investment: false, archived: false, bal: none }] : rows;
+    return none !== 0 || !rows.length ? [...rows, { id: "none", name: "Tanpa dompet", kind: "Belum dikelompokkan", archived: false, bal: none }] : rows;
   }, [txs, wallets]);
   const activeWalletBalances = walletBal.filter((w) => !w.archived);
   const archivedWalletBalances = walletBal.filter((w) => w.archived);
-  const investmentWalletBalances = activeWalletBalances.filter((w) => w.investment);
-  const regularWalletBalances = activeWalletBalances.filter((w) => !w.investment);
-  const archivedInvestmentBalances = archivedWalletBalances.filter((w) => w.investment);
-  const archivedRegularBalances = archivedWalletBalances.filter((w) => !w.investment);
+  const regularWalletBalances = activeWalletBalances;
+  const archivedRegularBalances = archivedWalletBalances;
   const regularWalletEntries = regularWalletBalances.filter((w) => w.id !== "none");
-  const investmentWalletEntries = investmentWalletBalances.filter((w) => w.id !== "none");
   const unassignedWalletBalance = walletBal.find((w) => w.id === "none")?.bal ?? 0;
-  const investmentBalance = investmentWalletBalances.reduce((sum, w) => sum + w.bal, 0);
   const saldo = regularWalletBalances.reduce((sum, w) => sum + w.bal, 0);
 
   const series = useMemo(() => {
@@ -338,45 +391,90 @@ function Dashboard({ session }: { session: Session }) {
     [...txs].sort((a, b) => a.date.localeCompare(b.date)).forEach((t) => {
       const k = t.date.slice(0, 7);
       if (!m.has(k)) m.set(k, { bulan: monthLabel(k, true), Pemasukan: 0, Pengeluaran: 0 });
-      if (t.type === "in" || isTransferFromInvestment(t)) m.get(k)!.Pemasukan += t.amount;
-      if (t.type === "out" || isTransferToInvestment(t)) m.get(k)!.Pengeluaran += t.amount;
+      if (t.type === "in") m.get(k)!.Pemasukan += t.amount;
+      if (t.type === "out") m.get(k)!.Pengeluaran += t.amount;
     });
     return Array.from(m.values());
-  }, [txs, investmentWalletIds]);
+  }, [txs]);
 
-  const byCat = useMemo(() => {
-    const m = new Map<string, number>();
-    monthTxs.filter((t) => (t.type === "out" && t.category.toLowerCase() !== "investasi") || isTransferToInvestment(t)).forEach((t) => {
-      const expenseCategory = isTransferToInvestment(t) ? "Investasi" : t.category;
-      m.set(expenseCategory, (m.get(expenseCategory) ?? 0) + t.amount);
-    });
-    return Array.from(m, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [monthTxs, investmentWalletIds]);
+  const reportYear = Number(month.slice(0, 4));
+  const reportMonth = Number(month.slice(5, 7));
+  const reportTransactions = txs.filter((transaction) =>
+    transaction.date.startsWith(`${reportYear}-`) &&
+    (reportScale === "yearly" || Number(transaction.date.slice(5, 7)) === reportMonth),
+  );
+  const reportIncome = reportTransactions
+    .filter((transaction) => transaction.type === "in")
+    .reduce((total, transaction) => total + transaction.amount, 0);
+  const reportExpense = reportTransactions
+    .filter((transaction) => transaction.type === "out")
+    .reduce((total, transaction) => total + transaction.amount, 0);
+  const reportExpensesByCategory = reportTransactions.reduce((totals, transaction) => {
+    if (transaction.type === "out") {
+      totals.set(transaction.category, (totals.get(transaction.category) ?? 0) + transaction.amount);
+    }
+    return totals;
+  }, new Map<string, number>());
+  const reportCategories = Array.from(reportExpensesByCategory, ([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+  const reportTotalExpense = reportCategories.reduce((total, category) => total + category.value, 0);
+  const reportTopCategory = reportCategories[0];
+  const reportTopCategoryPercent = reportTotalExpense ? Math.round((reportTopCategory?.value ?? 0) / reportTotalExpense * 100) : 0;
+  const reportChart = reportScale === "yearly"
+    ? Array.from({ length: 12 }, (_, index) => {
+        const m = index + 1;
+        const transactions = reportTransactions.filter((transaction) => Number(transaction.date.slice(5, 7)) === m);
+        return {
+          bulan: MONTH_NAMES[index].slice(0, 3),
+          Pemasukan: transactions.filter((transaction) => transaction.type === "in").reduce((total, transaction) => total + transaction.amount, 0),
+          Pengeluaran: transactions.filter((transaction) => transaction.type === "out").reduce((total, transaction) => total + transaction.amount, 0),
+        };
+      })
+    : Array.from({ length: new Date(reportYear, reportMonth, 0).getDate() }, (_, index) => {
+        const day = index + 1;
+        const transactions = reportTransactions.filter((transaction) => Number(transaction.date.slice(8, 10)) === day);
+        return {
+          bulan: String(day),
+          Pemasukan: transactions.filter((transaction) => transaction.type === "in").reduce((total, transaction) => total + transaction.amount, 0),
+          Pengeluaran: transactions.filter((transaction) => transaction.type === "out").reduce((total, transaction) => total + transaction.amount, 0),
+        };
+      });
+  const reportBudgetByCategory = budgets
+    .filter((budget) => budget.year === reportYear && (reportScale === "yearly" || budget.month === reportMonth))
+    .reduce((totals, budget) => totals.set(budget.category, (totals.get(budget.category) ?? 0) + budget.amount), new Map<string, number>());
+  const reportBudgetRows = Array.from(new Set([...reportBudgetByCategory.keys(), ...reportExpensesByCategory.keys()]))
+    .map((category) => ({
+      category,
+      budget: reportBudgetByCategory.get(category) ?? 0,
+      spent: reportExpensesByCategory.get(category) ?? 0,
+    }))
+    .sort((a, b) => b.spent - a.spent || b.budget - a.budget);
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     return q
-      ? monthTxs.filter((t) => `${t.category} ${t.note ?? ""}`.toLowerCase().includes(q))
+      ? monthTxs.filter((t) => {
+          const walletNames = [t.wallet_id, t.wallet_to_id]
+            .map((id) => wallets.find((wallet) => wallet.id === id)?.name ?? "")
+            .join(" ");
+          return `${t.category} ${t.note ?? ""} ${t.amount} ${t.date} ${walletNames}`.toLowerCase().includes(q);
+        })
       : monthTxs;
-  }, [monthTxs, search]);
+  }, [monthTxs, search, wallets]);
 
-  function switchType(t: "in" | "out" | "transfer") {
+  function switchType(t: "in" | "out") {
     setType(t);
-    setCategory(t === "transfer" ? "Pindah Dana" : (t === "in" ? IN_CATS : transactionExpenseCategories)[0] ?? "");
+    setCategory((t === "in" ? incomeCategories : expenseCategories)[0] ?? "");
+    setTransactionWishId("");
   }
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
     const amt = parseRupiah(amount);
     if (!amt) { setError("Isi nominal lebih dari 0."); return; }
-    if (type === "transfer" && (!walletId || !walletToId || walletId === walletToId)) {
-      setError("Pilih dompet asal dan tujuan yang berbeda.");
-      return;
-    }
     setSaving(true);
     setError("");
-    const transferToInvestment = type === "transfer" && transferMovesIntoInvestment(walletId, walletToId);
-    const row = { date, type, amount: amt, category: type === "transfer" ? transferToInvestment ? "Investasi" : "Pindah Dana" : category, note, wallet_id: walletId || null, wallet_to_id: type === "transfer" ? walletToId : null };
+    const row = { date, type, amount: amt, category, note, wallet_id: walletId || null, wallet_to_id: null, wishlist_id: type === "out" ? transactionWishId || null : null };
     const { error } = editId
       ? await supabase.from("transactions").update(row).eq("id", editId)
       : await supabase.from("transactions").insert(row);
@@ -389,12 +487,16 @@ function Dashboard({ session }: { session: Session }) {
     setSaving(false);
   }
 
-  function resetForm() { setAmount(""); setNote(""); setEditId(null); setWalletId(""); setWalletToId(""); setType("out"); setCategory(transactionExpenseCategories[0] ?? ""); }
+  function resetForm() { setAmount(""); setNote(""); setEditId(null); setWalletId(""); setTransactionWishId(""); setType("out"); setCategory(expenseCategories[0] ?? ""); }
 
   function startEdit(t: Tx) {
+    if (t.type === "transfer") {
+      setError("Transaksi pindah dana lama hanya dapat dihapus; fitur tersebut sudah tidak tersedia.");
+      return;
+    }
     setEditId(t.id); setType(t.type); setDate(t.date); setAmount(rupiahInput(String(t.amount)));
     setCategory(t.category); setNote(t.note ?? ""); setWalletId(t.wallet_id ?? "");
-    setWalletToId(t.wallet_to_id ?? "");
+    setTransactionWishId(t.wishlist_id ?? "");
     setNav("catat-transaksi");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -427,11 +529,39 @@ function Dashboard({ session }: { session: Session }) {
     }
   }
 
-  async function removeExpenseCategory(value: string) {
-    if (value.toLowerCase() === "investasi") {
-      setError("Kategori Investasi diperlukan untuk otomatis mencatat Pindah Dana ke dompet investasi.");
+  async function addIncomeCategory(e: React.FormEvent) {
+    e.preventDefault();
+    const value = newIncomeCategory.trim();
+    if (!value) return;
+    if (incomeCategories.some((item) => item.toLocaleLowerCase() === value.toLocaleLowerCase())) {
+      setError("Kategori tersebut sudah ada.");
       return;
     }
+    const { error } = await supabase.from("income_categories").insert({ user_id: session.user.id, category: value });
+    if (error) setError(error.message);
+    else {
+      setIncomeCategories((items) => [...items, value].sort((a, b) => a.localeCompare(b, "id")));
+      setNewIncomeCategory("");
+      setError("");
+    }
+  }
+
+  async function removeIncomeCategory(value: string) {
+    if (incomeCategories.length <= 1) {
+      setError("Minimal harus ada satu kategori pemasukan.");
+      return;
+    }
+    if (!window.confirm(`Hapus kategori "${value}" dari pilihan? Riwayat transaksi lama tetap disimpan.`)) return;
+    const { error } = await supabase.from("income_categories").delete().eq("category", value);
+    if (error) setError(error.message);
+    else {
+      const next = incomeCategories.filter((item) => item !== value);
+      setIncomeCategories(next);
+      if (type === "in" && category === value) setCategory(next[0]);
+    }
+  }
+
+  async function removeExpenseCategory(value: string) {
     if (expenseCategories.length <= 1) {
       setError("Minimal harus ada satu kategori pengeluaran.");
       return;
@@ -461,6 +591,34 @@ function Dashboard({ session }: { session: Session }) {
     else await load();
   }
 
+  async function permanentlyDeleteWallet(wallet: Wallet) {
+    if (!wallet.archived_at) {
+      setError("Hanya dompet yang sudah diarsipkan yang dapat dihapus permanen.");
+      return;
+    }
+    if (!window.confirm(`Hapus permanen dompet "${wallet.name}" beserta seluruh transaksi yang terkait? Tindakan ini tidak dapat dibatalkan.`)) return;
+
+    const { error: transactionError } = await supabase
+      .from("transactions")
+      .delete()
+      .or(`wallet_id.eq.${wallet.id},wallet_to_id.eq.${wallet.id}`);
+    if (transactionError) {
+      setError(`Transaksi terkait dompet tidak dapat dihapus: ${transactionError.message}`);
+      return;
+    }
+
+    const { error: walletError } = await supabase
+      .from("wallets")
+      .delete()
+      .eq("id", wallet.id)
+      .not("archived_at", "is", null);
+    if (walletError) {
+      setError(`Transaksi terkait sudah dihapus, tetapi dompet gagal dihapus: ${walletError.message}`);
+      return;
+    }
+    await load();
+  }
+
   async function changePassword(e: React.FormEvent) {
     e.preventDefault();
     if (newPassword.length < 6) {
@@ -471,12 +629,30 @@ function Dashboard({ session }: { session: Session }) {
       setPasswordMessage("Konfirmasi kata sandi tidak sama.");
       return;
     }
+    if (!currentPassword) {
+      setPasswordMessage("Masukkan kata sandi saat ini untuk verifikasi.");
+      return;
+    }
+    if (!session.user.email) {
+      setPasswordMessage("Email akun tidak tersedia untuk memverifikasi kata sandi saat ini.");
+      return;
+    }
     setChangingPassword(true);
     setPasswordMessage("");
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: session.user.email,
+      password: currentPassword,
+    });
+    if (verifyError) {
+      setChangingPassword(false);
+      setPasswordMessage("Kata sandi saat ini tidak benar.");
+      return;
+    }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setChangingPassword(false);
     if (error) setPasswordMessage(error.message);
     else {
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setPasswordMessage("Kata sandi berhasil diubah.");
@@ -588,12 +764,25 @@ function Dashboard({ session }: { session: Session }) {
     else setWishes((items) => items.filter((item) => item.id !== wish.id));
   }
 
+  async function completeWish(wish: Wish) {
+    const { error } = await supabase.from("wish_list")
+      .update({ completed_at: new Date().toISOString(), completed_amount: wish.target_amount })
+      .eq("id", wish.id);
+    if (error) setError(error.message);
+    else await load();
+  }
+
+  async function reopenWish(wish: Wish) {
+    const { error } = await supabase.from("wish_list")
+      .update({ completed_at: null, completed_amount: null })
+      .eq("id", wish.id);
+    if (error) setError(error.message);
+    else await load();
+  }
+
   const uname = username || (session.user.email ?? "").split("@")[0];
   const h = new Date().getHours();
   const sapa = h < 11 ? "pagi" : h < 15 ? "siang" : h < 18 ? "sore" : "malam";
-  const topCat = byCat[0];
-  const totalOut = byCat.reduce((a, c) => a + c.value, 0);
-  const topPct = topCat && totalOut ? Math.round((topCat.value / totalOut) * 100) : 0;
   const axis = { tickLine: false, axisLine: false, fontSize: 12 } as const;
   const budgetOverview = budgets.filter((b) => b.month === Number(month.slice(5)) && b.year === Number(month.slice(0, 4))).map((b) => {
     const range = budgetRange(b.month, b.year);
@@ -609,9 +798,9 @@ function Dashboard({ session }: { session: Session }) {
     });
   const budgetDateRange = budgetRange(viewBudgetMonth, viewBudgetYear);
   const chartTransactions = txs.filter((t) =>
-    ((t.type === "out" && t.category.toLowerCase() !== "investasi") || isTransferToInvestment(t)) &&
+    t.type === "out" &&
     t.date >= budgetDateRange.from && t.date <= budgetDateRange.to &&
-    (budgetFilter === "all" || (isTransferToInvestment(t) ? "Investasi" : t.category) === budgetFilter),
+    (budgetFilter === "all" || t.category === budgetFilter),
   );
   const chartBudgets = budgets.filter((budget) => budget.month === viewBudgetMonth && budget.year === viewBudgetYear && (budgetFilter === "all" || budget.category === budgetFilter));
   const budgetByCategory = chartBudgets.reduce(
@@ -620,8 +809,7 @@ function Dashboard({ session }: { session: Session }) {
   );
   const spentByCategory = chartTransactions.reduce(
     (totals, transaction) => {
-      const expenseCategory = isTransferToInvestment(transaction) ? "Investasi" : transaction.category;
-      return totals.set(expenseCategory, (totals.get(expenseCategory) ?? 0) + transaction.amount);
+      return totals.set(transaction.category, (totals.get(transaction.category) ?? 0) + transaction.amount);
     },
     new Map<string, number>(),
   );
@@ -630,7 +818,7 @@ function Dashboard({ session }: { session: Session }) {
     .sort((a, b) => b.spent - a.spent || b.budget - a.budget);
   const budgetChartBudgetTotal = budgetChart.reduce((sum, item) => sum + item.budget, 0);
   const budgetChartSpentTotal = budgetChart.reduce((sum, item) => sum + item.spent, 0);
-  const selectedBudgetCategory = type === "out" ? category : type === "transfer" && transferMovesIntoInvestment(walletId, walletToId) ? "Investasi" : undefined;
+  const selectedBudgetCategory = type === "out" ? category : undefined;
   const selectedCategoryBudget = selectedBudgetCategory
     ? budgets.find((b) => b.category === selectedBudgetCategory && b.month === Number(date.slice(5, 7)) && b.year === Number(date.slice(0, 4)))
     : undefined;
@@ -638,6 +826,8 @@ function Dashboard({ session }: { session: Session }) {
     ? expenseForCategoryInRange(selectedBudgetCategory ?? selectedCategoryBudget.category, budgetRange(selectedCategoryBudget.month, selectedCategoryBudget.year).from, budgetRange(selectedCategoryBudget.month, selectedCategoryBudget.year).to)
     : 0;
   const selectedCategoryPct = selectedCategoryBudget ? Math.min(100, (selectedCategorySpent / selectedCategoryBudget.amount) * 100) : 0;
+  const activeWishes = wishes.filter((wish) => !wish.completed_at);
+  const completedWishes = wishes.filter((wish) => !!wish.completed_at);
   const miniSeries = series.slice(-6);
   const balanceSummary = (
     <>
@@ -661,22 +851,6 @@ function Dashboard({ session }: { session: Session }) {
           {archivedRegularBalances.map((w) => <div className="wallet-entry archived-wallet-entry" key={w.id}><div><strong>{w.name}</strong><small>Riwayat dipertahankan</small></div><b>{rp(w.bal)}</b></div>)}
         </>}
       </section>
-      <section className="card balance-group">
-        <h2>Saldo Investasi</h2>
-        <div className="investment-total investment-total-large">
-          <span>Total saldo investasi</span>
-          <strong>{rp(investmentBalance)}</strong>
-          <small>Terpisah dari saldo dompet yang siap digunakan</small>
-        </div>
-        <h3>Investasi</h3>
-        {investmentWalletEntries.length ? investmentWalletEntries.map((w) => (
-          <div className="wallet-entry" key={w.id}><div><strong>{w.name}</strong><small>{w.kind}</small></div><b>{rp(w.bal)}</b></div>
-        )) : <p className="empty">Belum ada dompet investasi aktif.</p>}
-        {!!archivedInvestmentBalances.length && <>
-          <h3 className="archived-wallet-title">Investasi dihapus</h3>
-          {archivedInvestmentBalances.map((w) => <div className="wallet-entry archived-wallet-entry" key={w.id}><div><strong>{w.name}</strong><small>Riwayat dipertahankan</small></div><b>{rp(w.bal)}</b></div>)}
-        </>}
-      </section>
     </>
   );
   const transactionEntry = (
@@ -686,7 +860,6 @@ function Dashboard({ session }: { session: Session }) {
         <div className="seg" role="group" aria-label="Jenis transaksi">
           <button type="button" className="out" aria-pressed={type === "out"} onClick={() => switchType("out")}>Pengeluaran</button>
           <button type="button" className="in" aria-pressed={type === "in"} onClick={() => switchType("in")}>Pemasukan</button>
-          <button type="button" className="transfer" aria-pressed={type === "transfer"} onClick={() => switchType("transfer")}>Pindah dana</button>
         </div>
         <div className="row2">
           <div className="field">
@@ -698,11 +871,11 @@ function Dashboard({ session }: { session: Session }) {
             <input id="date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
         </div>
-        {type !== "transfer" && <div className="field">
+        <div className="field">
           <label htmlFor="cat">Kategori</label>
           <select id="cat" value={category} onChange={(e) => setCategory(e.target.value)}>
-            {type === "out" && editId && !transactionExpenseCategories.includes(category) && <option value={category}>{category}</option>}
-            {(type === "in" ? IN_CATS : transactionExpenseCategories).map((c) => <option key={c}>{c}</option>)}
+            {editId && !(type === "in" ? incomeCategories : expenseCategories).includes(category) && <option value={category}>{category}</option>}
+            {(type === "in" ? incomeCategories : expenseCategories).map((c) => <option key={c}>{c}</option>)}
           </select>
           {type === "out" && selectedCategoryBudget && (
             <div className="category-budget-hint">
@@ -713,40 +886,28 @@ function Dashboard({ session }: { session: Session }) {
             </div>
           )}
           {type === "out" && !selectedCategoryBudget && <small className="category-budget-empty">Belum ada anggaran untuk kategori ini pada bulan transaksi.</small>}
+        </div>
+        {type === "out" && <div className="field">
+          <label htmlFor="transaction-wishlist">Wish List (opsional)</label>
+          <select id="transaction-wishlist" value={transactionWishId} onChange={(e) => setTransactionWishId(e.target.value)}>
+            <option value="">Tidak terkait Wish List</option>
+            {wishes.filter((wish) => !wish.completed_at || wish.id === transactionWishId).map((wish) => (
+              <option key={wish.id} value={wish.id}>{wish.name} · Target {rp(wish.target_amount)}{wish.completed_at ? " (Selesai)" : ""}</option>
+            ))}
+          </select>
+          {transactionWishId && <small className="category-budget-empty">Saat pengeluaran disimpan, Wish List akan ditandai selesai dengan nominal transaksi sebagai harga pembelian.</small>}
         </div>}
         <div className="field">
           <label htmlFor="note">Catatan</label>
           <input id="note" placeholder="mis. bensin, maksi" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
         <div className="field">
-          <label htmlFor="wal">{type === "transfer" ? "Dompet asal" : "Dompet"}</label>
+          <label htmlFor="wal">Dompet</label>
           <select id="wal" value={walletId} onChange={(e) => setWalletId(e.target.value)}>
-            {type === "transfer" ? <option value="">Pilih dompet asal</option> : <option value="">Tanpa dompet</option>}
+            <option value="">Tanpa dompet</option>
             {wallets.filter((w) => !w.archived_at || w.id === walletId).map((w) => <option key={w.id} value={w.id}>{w.name}{w.archived_at ? " (Dompet dihapus)" : ""}</option>)}
           </select>
         </div>
-        {type === "transfer" && <div className="field">
-          <label htmlFor="wal-to">Dompet tujuan</label>
-          <select id="wal-to" value={walletToId} onChange={(e) => setWalletToId(e.target.value)}>
-            <option value="">Pilih dompet tujuan</option>
-            {wallets.filter((w) => w.id !== walletId && (!w.archived_at || w.id === walletToId)).map((w) => <option key={w.id} value={w.id}>{w.name}{w.archived_at ? " (Dompet dihapus)" : ` · ${KINDS[w.kind]}`}</option>)}
-          </select>
-          <small className="category-budget-empty">Saldo dompet asal berkurang; saldo dompet tujuan bertambah.</small>
-          {transferMovesIntoInvestment(walletId, walletToId) && selectedCategoryBudget && (
-            <div className="category-budget-hint">
-              <div className="bar" role="progressbar" aria-valuenow={Math.round(selectedCategoryPct)} aria-valuemin={0} aria-valuemax={100} aria-label="Anggaran Investasi">
-                <i className={selectedCategorySpent > selectedCategoryBudget.amount ? "over" : ""} style={{ width: `${selectedCategoryPct}%` }} />
-              </div>
-              <small>Masuk ke anggaran Investasi: sisa {rp(Math.max(0, selectedCategoryBudget.amount - selectedCategorySpent))} dari {rp(selectedCategoryBudget.amount)}.</small>
-            </div>
-          )}
-          {transferMovesIntoInvestment(walletId, walletToId) && !selectedCategoryBudget && (
-            <small className="category-budget-empty">Pindah dana ini otomatis tercatat sebagai pengeluaran kategori Investasi. Belum ada anggaran Investasi untuk bulan ini.</small>
-          )}
-          {transferMovesFromInvestment(walletId, walletToId) && (
-            <small className="category-budget-empty">Pencairan dari Investasi akan dihitung sebagai pemasukan.</small>
-          )}
-        </div>}
         <button className="btn" disabled={saving}>{saving ? "Menyimpan..." : editId ? "Simpan perubahan" : "Simpan transaksi"}</button>
         {editId && <button type="button" className="btn ghost" style={{ marginTop: 8, width: "100%" }} onClick={resetForm}>Batal</button>}
       </form>
@@ -754,8 +915,8 @@ function Dashboard({ session }: { session: Session }) {
   );
 
   return (
-    <div className={`shell ${nav === "anggaran" ? "budget-shell" : ""} ${sidebarOpen ? "" : "sidebar-collapsed"} ${nav === "catat-transaksi" || nav === "dompet" ? "transaction-shell" : ""}`}>
-      {nav !== "anggaran" && nav !== "catat-transaksi" && nav !== "dompet" && sidebarOpen && <aside className="side">
+    <div className={`shell ${nav === "anggaran" || nav === "wishlist" ? "budget-shell" : ""} ${nav === "catat-transaksi" || nav === "dompet" || nav === "wishlist" ? "transaction-shell" : ""}`}>
+      {nav !== "anggaran" && nav !== "catat-transaksi" && nav !== "dompet" && nav !== "wishlist" && <aside className="side">
         <div className="profile">
           <div className="avatar" aria-hidden="true">{(uname[0] ?? "?").toUpperCase()}</div>
           <b>{uname}</b>
@@ -765,16 +926,7 @@ function Dashboard({ session }: { session: Session }) {
             <div className="navgroup" key={group.label}>
               {group.label && <b className="navgroup-title">{group.label}</b>}
               <div className="navitems">
-                {group.items.map((item) => "action" in item ? (
-                  <button
-                    className="nav-action"
-                    key={item.id}
-                    type="button"
-                    onClick={() => supabase.auth.signOut()}
-                  >
-                    <Icon n={item.icon} /><span>{item.label}</span>
-                  </button>
-                ) : (
+                {group.items.map((item) => (
                   <button key={item.id} type="button" aria-current={nav === item.id} onClick={() => setNav(item.id)}>
                     <Icon n={item.icon} /><span>{item.label}</span>
                   </button>
@@ -785,7 +937,7 @@ function Dashboard({ session }: { session: Session }) {
         </nav>
       </aside>}
 
-      <main className={`main ${nav === "anggaran" ? "budget-page" : ""} ${nav === "catat-transaksi" ? "transaction-page" : ""} ${nav === "dompet" ? "wallet-page" : ""}`}>
+      <main className={`main ${nav === "anggaran" ? "budget-page" : ""} ${nav === "catat-transaksi" ? "transaction-page" : ""} ${nav === "dompet" ? "wallet-page" : ""} ${nav === "wishlist" ? "wishlist-page" : ""}`}>
         {nav === "anggaran" ? (
           <header className="budget-page-header">
             <button className="budget-back" type="button" onClick={() => setNav("beranda")} aria-label="Kembali ke Beranda">
@@ -793,6 +945,14 @@ function Dashboard({ session }: { session: Session }) {
             </button>
             <h1>Anggaran</h1>
             <button className="budget-add" type="button" onClick={openNewBudget} aria-label="Tambah anggaran">+</button>
+          </header>
+        ) : nav === "wishlist" ? (
+          <header className="transaction-page-header wishlist-page-header">
+            <button className="budget-back" type="button" onClick={() => setNav("beranda")} aria-label="Kembali ke Beranda">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12" /></svg>
+            </button>
+            <h1>Wish List</h1>
+            <button className="budget-add" type="button" onClick={() => { setWishEditing(null); setWishName(""); setWishAmount(""); setWishFormOpen(true); }} aria-label="Tambah Wish List">+</button>
           </header>
         ) : nav === "catat-transaksi" || nav === "dompet" ? (
           <header className="transaction-page-header">
@@ -803,15 +963,39 @@ function Dashboard({ session }: { session: Session }) {
           </header>
         ) : <header className="home-header">
           <div>
-            <div className="greeting">Selamat {sapa}, {uname}</div>
-            <h1>{nav === "beranda" ? "Beranda" : nav === "kelola-uang" ? "Kelola Uang" : nav === "catat-transaksi" ? "Catat Transaksi" : nav === "wishlist" ? "Wish List" : nav === "statistik" ? "Statistik" : "Pengaturan"}</h1>
+            {nav === "beranda"
+              ? <div className="greeting">Selamat {sapa}, {uname}</div>
+              : <h1>{nav === "kelola-uang" ? "Transaksi" : nav === "catat-transaksi" ? "Catat Transaksi" : nav === "wishlist" ? "Wish List" : nav === "statistik" ? "Statistik" : nav === "ubah-password" ? "Ubah kata sandi" : "Kategori"}</h1>}
           </div>
           <div className="home-header-actions">
-            {["beranda", "statistik", "kelola-uang", "catat-transaksi"].includes(nav) && <select className="pick" aria-label="Pilih bulan" value={month} onChange={(e) => setMonth(e.target.value)}>
-              {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
-            </select>}
-            <button className="icon-button" type="button" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label={sidebarOpen ? "Sembunyikan menu" : "Tampilkan menu"}><Icon n="menu" /></button>
-            <button className="icon-button" type="button" onClick={() => setNav("pengaturan")} aria-label="Buka pengaturan"><Icon n="settings" /></button>
+            {nav === "beranda" && <div className="period-picker">
+              <select className="pick period-month" aria-label="Pilih bulan" value={month.slice(5, 7)} onChange={(e) => setMonth(`${month.slice(0, 4)}-${e.target.value}`)}>
+                {MONTH_NAMES.map((name, index) => <option key={name} value={pad(index + 1)}>{name}</option>)}
+              </select>
+              <select className="pick period-year" aria-label="Pilih tahun" value={month.slice(0, 4)} onChange={(e) => setMonth(`${e.target.value}-${month.slice(5, 7)}`)}>
+                {transactionYears.map((year) => <option key={year} value={year}>{year}</option>)}
+              </select>
+            </div>}
+            <details className="account-menu" onClick={(event) => {
+              if ((event.target as HTMLElement).closest("button")) event.currentTarget.open = false;
+            }}>
+              <summary className="icon-button" aria-label="Menu akun" title="Menu akun"><Icon n="account" /></summary>
+              <div className="account-dropdown">
+                <div className="account-identity">
+                  <small>Akun</small>
+                  <strong>{uname}</strong>
+                </div>
+                <button type="button" onClick={() => { setPasswordMessage(""); setNav("ubah-password"); }}>
+                  <span>Kata sandi</span><small>Ubah kata sandi</small>
+                </button>
+                <button type="button" className="account-theme-toggle" onClick={() => setDarkMode((enabled) => !enabled)}>
+                  {darkMode ? "Mode terang" : "Mode gelap"}
+                </button>
+                <button className="account-signout" type="button" onClick={() => supabase.auth.signOut()}>
+                  Keluar
+                </button>
+              </div>
+            </details>
           </div>
         </header>}
 
@@ -860,24 +1044,6 @@ function Dashboard({ session }: { session: Session }) {
                   ))}
                 </>
                 : <p className="empty">Belum ada anggaran atau pengeluaran pada bulan ini.</p>}
-            </div>
-          </section>
-
-          <section className="budget-list category-manager">
-            <div className="section-heading">
-              <div><h2>Kategori pengeluaran</h2><small>Kelola kategori yang tersedia untuk transaksi dan anggaran.</small></div>
-            </div>
-            <form className="category-add-form" onSubmit={addExpenseCategory}>
-              <input aria-label="Nama kategori baru" placeholder="Nama kategori baru" value={newExpenseCategory} onChange={(e) => setNewExpenseCategory(e.target.value)} />
-              <button className="btn" type="submit">Tambah kategori</button>
-            </form>
-            <div className="category-chips">
-              {expenseCategories.map((item) => (
-                <span className="category-chip" key={item}>
-                  {item}
-                  <button type="button" disabled={item.toLowerCase() === "investasi"} title={item.toLowerCase() === "investasi" ? "Kategori ini digunakan oleh Pindah Dana ke investasi" : `Hapus kategori ${item}`} onClick={() => removeExpenseCategory(item)} aria-label={`Hapus kategori ${item}`}>×</button>
-                </span>
-              ))}
             </div>
           </section>
 
@@ -955,12 +1121,6 @@ function Dashboard({ session }: { session: Session }) {
           <strong>{rp(saldo)}</strong>
         </section>
 
-        <section className="investment-balance-card">
-          <span><Icon n="chart" /> Saldo Investasi</span>
-          <strong>{rp(investmentBalance)}</strong>
-          <button type="button" onClick={() => setNav("dompet")}>Lihat dompet</button>
-        </section>
-
         <div className="home-totals">
           <section className="total-tile income-tile">
             <span className="total-icon">↗</span><span>Pendapatan</span>
@@ -996,14 +1156,14 @@ function Dashboard({ session }: { session: Session }) {
             shown.slice(0, more ? shown.length : 5).map((t) => (
               <div className="tx" key={t.id}>
                 <div>
-                  <div className="cat">{t.type === "transfer" ? `Pindah Dana${isTransferToInvestment(t) ? " · Investasi" : ""}` : t.category}{t.note ? ` · ${t.note}` : ""}</div>
+                  <div className="cat">{transactionCategory(t)}{t.note ? ` · ${t.note}` : ""}</div>
                   <div className="meta">{dateLabel(t.date)}{t.type === "transfer"
-                    ? ` · ${wallets.find((w) => w.id === t.wallet_id)?.name ?? "Dompet asal"}${wallets.find((w) => w.id === t.wallet_id)?.archived_at ? " (Dompet sudah dihapus)" : ""} → ${wallets.find((w) => w.id === t.wallet_to_id)?.name ?? "Dompet tujuan"}${wallets.find((w) => w.id === t.wallet_to_id)?.archived_at ? " (Dompet sudah dihapus)" : ""}`
+                    ? " · Riwayat lama"
                     : t.wallet_id ? ` · ${wallets.find((w) => w.id === t.wallet_id)?.name ?? ""}${wallets.find((w) => w.id === t.wallet_id)?.archived_at ? " (Dompet sudah dihapus)" : ""}` : ""}</div>
                 </div>
-                <div className={`amt ${t.type === "transfer" ? isTransferToInvestment(t) ? "out" : isTransferFromInvestment(t) ? "in" : "" : t.type}`}>{t.type === "transfer" ? `${isTransferToInvestment(t) ? "-" : isTransferFromInvestment(t) ? "+" : ""}${rp(t.amount)}` : `${t.type === "in" ? "+" : "-"}${rp(t.amount)}`}</div>
+                <div className={`amt ${t.type === "transfer" ? "" : t.type}`}>{t.type === "transfer" ? rp(t.amount) : `${t.type === "in" ? "+" : "-"}${rp(t.amount)}`}</div>
                 <span className="transaction-actions">
-                  <button className="del" onClick={() => startEdit(t)}>Ubah</button>
+                  {t.type !== "transfer" && <button className="del" onClick={() => startEdit(t)}>Ubah</button>}
                   <button className="del" onClick={() => remove(t)}>Hapus</button>
                 </span>
               </div>
@@ -1070,100 +1230,125 @@ function Dashboard({ session }: { session: Session }) {
         </>}
 
         {nav !== "beranda" && nav !== "anggaran" && <>
-        {!["catat-transaksi", "dompet"].includes(nav) && <h2 className="page-section-title">{nav === "kelola-uang" ? "Kelola Uang" : nav === "wishlist" ? "Wish List" : nav === "statistik" ? "Statistik" : "Pengaturan akun"}</h2>}
-        <div className={`cols ${nav === "kelola-uang" ? "manage-view" : nav === "catat-transaksi" ? "transaction-view" : nav === "dompet" ? "wallet-view" : nav === "statistik" ? "stats-view" : "settings-view"}`}>
-          {nav === "kelola-uang" && <div className="col">
-<section className="card">
-          <h2>Dompet</h2>
-          <div className="pcard">
-            <small>Saldo saat ini</small>
-            <div className="big">{rp(saldo)}</div>
-            <div className="row"><span>{uname}</span><span>{monthLabel(month, true)}</span></div>
-          </div>
-          {walletBal.map((w) => (
-            <div className="tx" key={w.id}>
-              <div><div className="cat">{w.name}</div><div className="meta">{w.kind}</div></div>
-              <div className="amt">{rp(w.bal)}</div>
+        {!["kelola-uang", "catat-transaksi", "dompet", "wishlist", "statistik", "pengaturan", "ubah-password"].includes(nav) && <h2 className="page-section-title">Pengaturan akun</h2>}
+        <div className={`cols ${nav === "kelola-uang" ? "manage-view" : nav === "catat-transaksi" ? "transaction-view" : nav === "dompet" ? "wallet-view" : nav === "wishlist" ? "wishlist-view" : nav === "statistik" ? "stats-view" : "settings-view"}`}>
+          {nav === "kelola-uang" && <div className="transaction-history-page">
+            <div className="transaction-summary">
+              <section className="card transaction-summary-income">
+                <span>Pemasukan</span>
+                <strong>{rp(transactionIncomeTotal)}</strong>
+              </section>
+              <section className="card transaction-summary-expense">
+                <span>Pengeluaran</span>
+                <strong>{rp(transactionExpenseTotal)}</strong>
+              </section>
             </div>
-          ))}
-          <details className="adder"><summary>Tambah dompet</summary>
-          <form onSubmit={addWallet} style={{ display: "grid", gap: 8, marginTop: 12 }}>
-            <div className="row2">
-              <input className="month" aria-label="Nama dompet" placeholder="mis. GoPay, BCA" value={newWallet.name} onChange={(e) => setNewWallet({ ...newWallet, name: e.target.value })} />
-              <select className="month" aria-label="Jenis dompet" value={newWallet.kind} onChange={(e) => setNewWallet({ ...newWallet, kind: e.target.value as Wallet["kind"] })}>
-                {Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
-            <button className="btn ghost" style={{ width: "100%" }}>Tambah dompet</button>
-          </form></details>
-        </section>
-  </div>}
+            <section className="card recent-card transaction-history-card">
+              <div className="section-heading recent-heading">
+                <div><h2>Riwayat transaksi</h2><small>{monthLabel(month)}</small></div>
+                <div className="transaction-history-actions">
+                  <select
+                    className="pick transaction-filter-month"
+                    aria-label="Pilih bulan transaksi"
+                    value={month.slice(5, 7)}
+                    onChange={(e) => setMonth(`${month.slice(0, 4)}-${e.target.value}`)}
+                  >
+                    {MONTH_NAMES.map((name, index) => <option key={name} value={pad(index + 1)}>{name}</option>)}
+                  </select>
+                  <select
+                    className="pick transaction-filter-year"
+                    aria-label="Pilih tahun transaksi"
+                    value={month.slice(0, 4)}
+                    onChange={(e) => setMonth(`${e.target.value}-${month.slice(5, 7)}`)}
+                  >
+                    {transactionYears.map((year) => <option key={year} value={year}>{year}</option>)}
+                  </select>
+                  <select
+                    className="pick transaction-filter-category"
+                    aria-label="Pilih kategori transaksi"
+                    value={transactionCategoryFilter}
+                    onChange={(e) => setTransactionCategoryFilter(e.target.value)}
+                  >
+                    <option value="all">Semua kategori</option>
+                    {transactionCategories.map((categoryName) => <option key={categoryName} value={categoryName}>{categoryName}</option>)}
+                  </select>
+                  <label className="recent-search">
+                    <span className="sr">Cari transaksi</span>
+                    <input placeholder="Cari transaksi" value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <Icon n="search" />
+                  </label>
+                  <button className="btn transaction-add-button" type="button" onClick={() => { resetForm(); setNav("catat-transaksi"); }}>+ Catat transaksi</button>
+                </div>
+              </div>
+              {loading ? (
+                <p className="empty">Memuat...</p>
+              ) : transactionRows.length === 0 ? (
+                <p className="empty">{search || transactionCategoryFilter !== "all" ? "Tidak ada transaksi yang sesuai dengan pilihan." : "Belum ada transaksi untuk periode ini."}</p>
+              ) : transactionRows.map((t) => (
+                <div className="tx" key={t.id}>
+                  <div>
+                    <div className="cat">{transactionCategory(t)}{t.note ? ` · ${t.note}` : ""}</div>
+                    <div className="meta">{dateLabel(t.date)}{t.type === "transfer"
+                      ? " · Riwayat lama"
+                      : t.wallet_id ? ` · ${wallets.find((w) => w.id === t.wallet_id)?.name ?? ""}${wallets.find((w) => w.id === t.wallet_id)?.archived_at ? " (Dompet sudah dihapus)" : ""}` : ""}</div>
+                  </div>
+                  <div className={`amt ${t.type === "transfer" ? "" : t.type}`}>{t.type === "transfer" ? rp(t.amount) : `${t.type === "in" ? "+" : "-"}${rp(t.amount)}`}</div>
+                  <span className="transaction-actions">
+                    {t.type !== "transfer" && <button className="del" onClick={() => startEdit(t)}>Ubah</button>}
+                    <button className="del" onClick={() => remove(t)}>Hapus</button>
+                  </span>
+                </div>
+              ))}
+            </section>
+          </div>}
 
   {nav === "catat-transaksi" && <>{balanceSummary}{transactionEntry}</>}
 
   {nav === "dompet" && <>
     <section className="card wallet-balance-panel">
-      <h2>Saldo saat ini</h2>
+      <div className="wallet-section-heading">
+        <div><h2>Ringkasan saldo</h2><small>Saldo total mencakup transaksi yang belum dipasangkan ke dompet.</small></div>
+      </div>
       <div className="pcard">
-        <small>Total saldo dompet</small>
+        <small>Total saldo</small>
         <div className="big">{rp(saldo)}</div>
+        <span>Perubahan bersih dari seluruh transaksi</span>
       </div>
       <h3>Dompet</h3>
       {regularWalletEntries.length ? regularWalletEntries.map((w) => (
         <article className="wallet-entry" key={w.id}>
           <div><strong>{w.name}</strong><small>{w.kind}</small></div>
-          <b>{rp(w.bal)}</b>
+          <b className={`wallet-entry-value${w.bal < 0 ? " negative" : ""}`}>{rp(w.bal)}</b>
           <button type="button" onClick={() => { const wallet = wallets.find((item) => item.id === w.id); if (wallet) archiveWallet(wallet); }}>Hapus</button>
         </article>
       )) : <p className="empty">Belum ada dompet aktif.</p>}
-      {unassignedWalletBalance !== 0 && <div className="wallet-entry"><div><strong>Tanpa dompet</strong><small>Transaksi belum dipasangkan</small></div><b>{rp(unassignedWalletBalance)}</b></div>}
+      {unassignedWalletBalance !== 0 && <div className="wallet-entry unassigned-wallet-entry"><div><strong>Tanpa dompet</strong><small>Transaksi yang belum dipasangkan ke dompet</small></div><b className={`wallet-entry-value${unassignedWalletBalance < 0 ? " negative" : ""}`}>{rp(unassignedWalletBalance)}</b></div>}
       {!!archivedRegularBalances.length && <>
         <h3 className="archived-wallet-title">Dompet dihapus</h3>
         {archivedRegularBalances.map((w) => (
           <article className="wallet-entry archived-wallet-entry" key={w.id}>
             <div><strong>{w.name}</strong><small>Riwayat transaksi tetap tersimpan</small></div>
-            <b>{rp(w.bal)}</b>
-            <button type="button" onClick={() => { const wallet = wallets.find((item) => item.id === w.id); if (wallet) restoreWallet(wallet); }}>Pulihkan</button>
-          </article>
-        ))}
-      </>}
-    </section>
-    <section className="card wallet-investment-panel">
-      <h2>Saldo Investasi</h2>
-      <div className="investment-total investment-total-large">
-        <span>Total investasi</span>
-        <strong>{rp(investmentBalance)}</strong>
-        <small>Saldo yang dipisahkan dari dompet siap pakai</small>
-      </div>
-      <h3>Investasi</h3>
-      {investmentWalletEntries.length ? investmentWalletEntries.map((w) => (
-        <article className="wallet-entry" key={w.id}>
-          <div><strong>{w.name}</strong><small>{w.kind}</small></div>
-          <b>{rp(w.bal)}</b>
-          <button type="button" onClick={() => { const wallet = wallets.find((item) => item.id === w.id); if (wallet) archiveWallet(wallet); }}>Hapus</button>
-        </article>
-      )) : <p className="empty">Belum ada dompet investasi aktif.</p>}
-      {!!archivedInvestmentBalances.length && <>
-        <h3 className="archived-wallet-title">Investasi dihapus</h3>
-        {archivedInvestmentBalances.map((w) => (
-          <article className="wallet-entry archived-wallet-entry" key={w.id}>
-            <div><strong>{w.name}</strong><small>Riwayat transaksi tetap tersimpan</small></div>
-            <b>{rp(w.bal)}</b>
-            <button type="button" onClick={() => { const wallet = wallets.find((item) => item.id === w.id); if (wallet) restoreWallet(wallet); }}>Pulihkan</button>
+            <b className={`wallet-entry-value${w.bal < 0 ? " negative" : ""}`}>{rp(w.bal)}</b>
+            <div className="archived-wallet-actions">
+              <button type="button" onClick={() => { const wallet = wallets.find((item) => item.id === w.id); if (wallet) restoreWallet(wallet); }}>Pulihkan</button>
+              <button type="button" className="wallet-permanent-delete" onClick={() => { const wallet = wallets.find((item) => item.id === w.id); if (wallet) permanentlyDeleteWallet(wallet); }}>Hapus permanen</button>
+            </div>
           </article>
         ))}
       </>}
     </section>
     <section className="card wallet-add-card">
-      <h2>Tambah dompet</h2>
+      <div className="wallet-section-heading">
+        <div><h2>Tambah dompet</h2><small>Buat dompet untuk mengelompokkan transaksi.</small></div>
+      </div>
       <form onSubmit={addWallet}>
         <div className="field">
           <label htmlFor="new-wallet-name">Nama dompet</label>
-          <input id="new-wallet-name" required placeholder="mis. BCA, GoPay, Reksadana" value={newWallet.name} onChange={(e) => setNewWallet({ ...newWallet, name: e.target.value })} />
+          <input id="new-wallet-name" required placeholder="mis. BCA, GoPay, Tunai" value={newWallet.name} onChange={(e) => setNewWallet({ ...newWallet, name: e.target.value })} />
         </div>
         <div className="field">
           <label htmlFor="new-wallet-kind">Jenis dompet</label>
-          <select id="new-wallet-kind" value={newWallet.kind} onChange={(e) => setNewWallet({ ...newWallet, kind: e.target.value as Wallet["kind"] })}>
+          <select id="new-wallet-kind" value={newWallet.kind} onChange={(e) => setNewWallet({ ...newWallet, kind: e.target.value as keyof typeof KINDS })}>
             {Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
@@ -1172,71 +1357,91 @@ function Dashboard({ session }: { session: Session }) {
     </section>
   </>}
 
-  {nav === "wishlist" && <section className="card wishlist-card">
-    <div className="section-heading">
-      <h2>Daftar keinginan</h2>
-      <button type="button" onClick={() => { setWishEditing(null); setWishName(""); setWishAmount(""); setWishFormOpen(true); }}>+ Tambah</button>
-    </div>
-    {wishes.length === 0 ? <p className="empty">Belum ada barang di Wish List. Tambahkan nama barang dan harga targetnya.</p> : wishes.map((wish) => (
-      <article className="wishlist-entry" key={wish.id}>
-        <div><strong>{wish.name}</strong><small>Target harga</small></div>
-        <b>{rp(wish.target_amount)}</b>
-        <span className="budget-entry-actions">
-          <button type="button" onClick={() => editWish(wish)}>Ubah</button>
-          <button type="button" onClick={() => removeWish(wish)}>Hapus</button>
-        </span>
-      </article>
-    ))}
-  </section>}
+  {nav === "wishlist" && <>
+    <section className="card wishlist-card">
+      <div className="section-heading">
+        <div><h2>Daftar keinginan</h2><small>Barang yang masih ingin kamu beli</small></div>
+        <span className="wishlist-count">{activeWishes.length} aktif</span>
+      </div>
+      {activeWishes.length === 0
+        ? <p className="empty">Belum ada barang aktif. Tambahkan barang yang ingin kamu beli.</p>
+        : <div className="wishlist-grid">{activeWishes.map((wish) => (
+          <article className="wishlist-entry" key={wish.id}>
+            <div className="wishlist-item-details">
+              <strong>{wish.name}</strong>
+              <small>Target harga</small>
+              <b>{rp(wish.target_amount)}</b>
+            </div>
+            <div className="wishlist-entry-actions">
+              <button type="button" onClick={() => editWish(wish)}>Ubah</button>
+              <button type="button" className="wishlist-complete" onClick={() => completeWish(wish)}>Selesai</button>
+              <button type="button" className="wishlist-delete" onClick={() => removeWish(wish)}>Hapus</button>
+            </div>
+          </article>
+        ))}</div>}
+    </section>
+    <section className="card wishlist-card wishlist-history">
+      <div className="section-heading">
+        <div><h2>Riwayat selesai</h2><small>Wish List yang sudah terpenuhi</small></div>
+        <span className="wishlist-count">{completedWishes.length} selesai</span>
+      </div>
+      {completedWishes.length === 0
+        ? <p className="empty">Barang yang ditandai selesai akan muncul di sini.</p>
+        : <div className="wishlist-grid">{completedWishes.map((wish) => (
+          <article className="wishlist-entry completed-wishlist-entry" key={wish.id}>
+            <div className="wishlist-item-details">
+              <strong>{wish.name}</strong>
+              <small>Selesai {wish.completed_at ? dateLabel(wish.completed_at.slice(0, 10)) : ""}</small>
+              <span>Target {rp(wish.target_amount)}</span>
+              <b>Harga pembelian {rp(wish.completed_amount ?? wish.target_amount)}</b>
+            </div>
+            <div className="wishlist-entry-actions">
+              <button type="button" onClick={() => reopenWish(wish)}>Aktifkan lagi</button>
+              <button type="button" className="wishlist-delete" onClick={() => removeWish(wish)}>Hapus</button>
+            </div>
+          </article>
+        ))}</div>}
+    </section>
+  </>}
 
-          {nav === "statistik" && <div className="col">
-            <section className="card" id="statistik">
-              <h2>Kategori <small>Pengeluaran {monthLabel(month)}</small></h2>
-              {byCat.length === 0 ? (
-                <p className="empty">Belum ada pengeluaran di bulan ini.</p>
-              ) : (
-                <>
-                  <div className="donut">
-                    <div className="donut-chart">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={byCat} dataKey="value" nameKey="name" innerRadius="68%" outerRadius="94%" paddingAngle={2} stroke="none" cornerRadius={6}>
-                            {byCat.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                          </Pie>
-                          <Tooltip formatter={(v: number) => rp(v)} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="donut-mid"><b>{topPct}%</b><small>{topCat?.name}</small></div>
-                    </div>
-                    <div className="legend">
-                      {byCat.map((c, i) => <span key={c.name}><i style={{ background: COLORS[i % COLORS.length] }} />{c.name}</span>)}
-                    </div>
-                  </div>
-                  <div className="topcat">
-                    <small>{topCat?.name}</small>
-                    <b>{rp(topCat?.value ?? 0)}</b>
-                    <small>Total pengeluaran {rp(totalOut)}</small>
-                  </div>
-                </>
-              )}
+          {nav === "statistik" && <div className="report-page" id="statistik">
+            <section className="card report-controls">
+              <div className="budget-period-tabs" role="tablist" aria-label="Skala laporan">
+                <button type="button" role="tab" aria-selected={reportScale === "monthly"} onClick={() => setReportScale("monthly")}>Bulanan</button>
+                <button type="button" role="tab" aria-selected={reportScale === "yearly"} onClick={() => setReportScale("yearly")}>Tahunan</button>
+              </div>
+              <div className="report-date-controls">
+                {reportScale === "monthly" && <select className="pick" aria-label="Pilih bulan laporan" value={month.slice(5, 7)} onChange={(e) => setMonth(`${month.slice(0, 4)}-${e.target.value}`)}>
+                  {MONTH_NAMES.map((name, index) => <option key={name} value={pad(index + 1)}>{name}</option>)}
+                </select>}
+                <select className="pick" aria-label="Pilih tahun laporan" value={reportYear} onChange={(e) => setMonth(`${e.target.value}-${month.slice(5, 7)}`)}>
+                  {transactionYears.map((year) => <option key={year} value={year}>{year}</option>)}
+                </select>
+              </div>
             </section>
 
-          </div>}
+            <div className="report-summary">
+              <section className="card report-income"><span>Total pemasukan</span><strong>{rp(reportIncome)}</strong></section>
+              <section className="card report-expense"><span>Total pengeluaran</span><strong>{rp(reportExpense)}</strong></section>
+              <section className="card report-net"><span>Selisih</span><strong>{rp(reportIncome - reportExpense)}</strong></section>
+              <section className="card report-saving"><span>Rasio tersisa</span><strong>{reportIncome > 0 ? `${Math.round(((reportIncome - reportExpense) / reportIncome) * 100)}%` : "—"}</strong></section>
+            </div>
 
-          {nav === "statistik" && <div className="col">
             <section className="card">
-              <h2>Arus kas <small>Pemasukan dan pengeluaran per bulan</small></h2>
+              <div className="section-heading">
+                <div><h2>Arus kas</h2><small>{reportScale === "yearly" ? `Per bulan · ${reportYear}` : `Per hari · ${monthLabel(month)}`}</small></div>
+              </div>
               <div className="legend row">
                 <span><i style={{ background: "var(--in)" }} />Pemasukan</span>
                 <span><i style={{ background: "var(--out)" }} />Pengeluaran</span>
               </div>
-              <div style={{ height: 260 }}>
+              <div className="report-chart">
                 <ResponsiveContainer>
-                  <LineChart data={series}>
+                  <LineChart data={reportChart}>
                     <CartesianGrid vertical={false} stroke="#ece7da" />
-                    <XAxis dataKey="bulan" {...axis} />
-                    <YAxis {...axis} width={44} tickFormatter={(v: number) => `${Math.round(v / 1000)}rb`} />
-                    <Tooltip formatter={(v: number) => rp(v)} />
+                    <XAxis dataKey="bulan" {...axis} interval={reportScale === "monthly" ? 4 : 0} />
+                    <YAxis {...axis} width={54} tickFormatter={(value: number) => `${Math.round(value / 1000)}rb`} />
+                    <Tooltip formatter={(value: number) => rp(value)} />
                     <Line type="monotone" dataKey="Pemasukan" stroke="#12b886" strokeWidth={3} dot={false} />
                     <Line type="monotone" dataKey="Pengeluaran" stroke="#ee4a74" strokeWidth={3} dot={false} />
                   </LineChart>
@@ -1244,36 +1449,101 @@ function Dashboard({ session }: { session: Session }) {
               </div>
             </section>
 
-            <section className="card">
-              <h2>Analisis pengeluaran <small>Total per bulan</small></h2>
-              <div style={{ height: 240 }}>
-                <ResponsiveContainer>
-                  <BarChart data={series}>
-                    <CartesianGrid vertical={false} stroke="#ece7da" />
-                    <XAxis dataKey="bulan" {...axis} />
-                    <YAxis {...axis} width={44} tickFormatter={(v: number) => `${Math.round(v / 1000)}rb`} />
-                    <Tooltip formatter={(v: number) => rp(v)} />
-                    <Bar dataKey="Pengeluaran" fill="#8e92f0" radius={[8, 8, 0, 0]} barSize={14} />
-                  </BarChart>
-                </ResponsiveContainer>
+            <div className="report-analysis-grid">
+              <section className="card">
+                <h2>Pengeluaran per kategori</h2>
+                {!reportCategories.length ? <p className="empty">Belum ada pengeluaran pada periode ini.</p> : <>
+                  <div className="donut">
+                    <div className="donut-chart">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={reportCategories} dataKey="value" nameKey="name" innerRadius="68%" outerRadius="94%" paddingAngle={2} stroke="none" cornerRadius={6}>
+                            {reportCategories.map((item, index) => <Cell key={item.name} fill={COLORS[index % COLORS.length]} />)}
+                          </Pie>
+                          <Tooltip formatter={(value: number) => rp(value)} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="donut-mid"><b>{reportTopCategoryPercent}%</b><small>{reportTopCategory?.name}</small></div>
+                    </div>
+                    <div className="legend">
+                      {reportCategories.map((category, index) => <span key={category.name}><i style={{ background: COLORS[index % COLORS.length] }} />{category.name} · {rp(category.value)}</span>)}
+                    </div>
+                  </div>
+                  <p className="report-largest">Pengeluaran terbesar: <strong>{reportTopCategory?.name}</strong> ({rp(reportTopCategory?.value ?? 0)})</p>
+                </>}
+              </section>
+
+              <section className="card">
+                <h2>Anggaran vs realisasi</h2>
+                <small>{reportScale === "yearly" ? `Anggaran bulanan dijumlahkan untuk ${reportYear}` : monthLabel(month)}</small>
+                {!reportBudgetRows.length ? <p className="empty">Belum ada anggaran atau pengeluaran pada periode ini.</p> : reportBudgetRows.map((row) => {
+                  const over = row.budget > 0 && row.spent > row.budget;
+                  const percent = row.budget > 0 ? Math.min(100, row.spent / row.budget * 100) : row.spent > 0 ? 100 : 0;
+                  return <div className="report-budget-row" key={row.category}>
+                    <div className="budget-entry-heading">
+                      <strong>{row.category}</strong>
+                      <strong>{rp(row.spent)} <small>/ {rp(row.budget)}</small></strong>
+                    </div>
+                    <div className="bar" role="progressbar" aria-valuenow={Math.round(percent)} aria-valuemin={0} aria-valuemax={100} aria-label={`Realisasi anggaran ${row.category}`}>
+                      <i className={over ? "over" : ""} style={{ width: `${percent}%` }} />
+                    </div>
+                  </div>;
+                })}
+              </section>
+            </div>
+          </div>}
+
+          {nav === "pengaturan" && <div className="category-settings-grid">
+            <section className="card category-manager">
+              <div className="section-heading">
+                <div><h2>Kategori pemasukan</h2><small>Pilih kategori yang tersedia saat mencatat pemasukan.</small></div>
+              </div>
+              <form className="category-add-form" onSubmit={addIncomeCategory}>
+                <input aria-label="Nama kategori pemasukan baru" placeholder="Nama kategori baru" value={newIncomeCategory} onChange={(e) => setNewIncomeCategory(e.target.value)} />
+                <button className="btn" type="submit">Tambah kategori</button>
+              </form>
+              <div className="category-chips">
+                {incomeCategories.map((item) => (
+                  <span className="category-chip" key={item}>
+                    {item}
+                    <button type="button" title={`Hapus kategori ${item}`} onClick={() => removeIncomeCategory(item)} aria-label={`Hapus kategori pemasukan ${item}`}>×</button>
+                  </span>
+                ))}
               </div>
             </section>
 
-          </div>
-          }
+            <section className="card category-manager">
+              <div className="section-heading">
+                <div><h2>Kategori pengeluaran</h2><small>Atur kategori yang tersedia saat mencatat pengeluaran.</small></div>
+              </div>
+              <form className="category-add-form" onSubmit={addExpenseCategory}>
+                <input aria-label="Nama kategori pengeluaran baru" placeholder="Nama kategori baru" value={newExpenseCategory} onChange={(e) => setNewExpenseCategory(e.target.value)} />
+                <button className="btn" type="submit">Tambah kategori</button>
+              </form>
+              <div className="category-chips">
+                {expenseCategories.map((item) => (
+                  <span className="category-chip" key={item}>
+                    {item}
+                    <button type="button" title={`Hapus kategori ${item}`} onClick={() => removeExpenseCategory(item)} aria-label={`Hapus kategori pengeluaran ${item}`}>×</button>
+                  </span>
+                ))}
+              </div>
+            </section>
+          </div>}
 
-          {nav === "pengaturan" && <div className="col">
-            <section className="card" id="pengaturan">
-              <h2>Pengaturan akun</h2>
+          {nav === "ubah-password" && <div className="col">
+            <section className="card" id="ubah-password">
+              <h2>Ubah kata sandi</h2>
               <p className="note">Akun: {session.user.email ?? uname}</p>
               <form onSubmit={changePassword}>
                 <div className="field">
-                  <label htmlFor="new-password">Kata sandi baru</label>
-                  <input id="new-password" type="password" autoComplete="new-password" minLength={6} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                  <PasswordField id="current-password" label="Kata sandi saat ini" autoComplete="current-password" required value={currentPassword} onChange={setCurrentPassword} />
                 </div>
                 <div className="field">
-                  <label htmlFor="confirm-password">Konfirmasi kata sandi baru</label>
-                  <input id="confirm-password" type="password" autoComplete="new-password" minLength={6} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                  <PasswordField id="new-password" label="Kata sandi baru" autoComplete="new-password" minLength={6} required value={newPassword} onChange={setNewPassword} />
+                </div>
+                <div className="field">
+                  <PasswordField id="confirm-password" label="Konfirmasi kata sandi baru" autoComplete="new-password" minLength={6} required value={confirmPassword} onChange={setConfirmPassword} />
                 </div>
                 {passwordMessage && <p className={passwordMessage === "Kata sandi berhasil diubah." ? "note" : "err"} role={passwordMessage === "Kata sandi berhasil diubah." ? "status" : "alert"}>{passwordMessage}</p>}
                 <button className="btn" disabled={changingPassword}>{changingPassword ? "Menyimpan..." : "Ubah kata sandi"}</button>
