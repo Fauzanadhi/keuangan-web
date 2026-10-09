@@ -27,20 +27,20 @@
   <circle cx="404" cy="103" r="121" fill="#86cfff" opacity=".12"/>
   <circle cx="100" cy="423" r="152" fill="#4de1dc" opacity=".08"/>
   <g transform="translate(0 -48)">
-    <path d="M103 186h306a35 35 0 0 1 35 35v155a47 47 0 0 1-47 47H115a47 47 0 0 1-47-47V221a35 35 0 0 1 35-35Z" fill="url(#wallet)" stroke="#edf4ff" stroke-width="14" stroke-linejoin="round"/>
-    <path d="M103 192h306a29 29 0 0 1 29 29v17H74v-17a29 29 0 0 1 29-29Z" fill="url(#fold)" stroke="#f7faff" stroke-width="7"/>
-    <path d="M83 229h346" fill="none" stroke="#5f7fbf" stroke-opacity=".78" stroke-width="8" stroke-linecap="round"/>
-    <path d="M88 243h335" fill="none" stroke="#eaf2ff" stroke-opacity=".88" stroke-width="5" stroke-linecap="round"/>
-    <path d="M435 280h-115a43 43 0 0 0 0 86h115" fill="#2b478c" stroke="#edf4ff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="331" cy="323" r="10" fill="#76e7df"/>
-    <g transform="translate(-16 19)">
-      <circle cx="194" cy="310" r="57" fill="#20366f" fill-opacity=".38"/>
-      <circle cx="194" cy="304" r="55" fill="url(#coin)" stroke="#f5fbff" stroke-width="10"/>
-      <circle cx="194" cy="304" r="43" fill="none" stroke="#a4f3eb" stroke-opacity=".5" stroke-width="2.5"/>
-      <g transform="translate(-4 4)">
-        <path d="M168 322 187 304 199 313 229 277" fill="none" stroke="url(#chart)" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.5"/>
-        <path d="m215 282 14-5-2 15" fill="none" stroke="#dffefa" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>
-      </g>
+  <path d="M103 186h306a35 35 0 0 1 35 35v155a47 47 0 0 1-47 47H115a47 47 0 0 1-47-47V221a35 35 0 0 1 35-35Z" fill="url(#wallet)" stroke="#edf4ff" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M103 192h306a29 29 0 0 1 29 29v17H74v-17a29 29 0 0 1 29-29Z" fill="url(#fold)" stroke="#f7faff" stroke-width="7"/>
+  <path d="M83 229h346" fill="none" stroke="#5f7fbf" stroke-opacity=".78" stroke-width="8" stroke-linecap="round"/>
+  <path d="M88 243h335" fill="none" stroke="#eaf2ff" stroke-opacity=".88" stroke-width="5" stroke-linecap="round"/>
+  <path d="M435 280h-115a43 43 0 0 0 0 86h115" fill="#2b478c" stroke="#edf4ff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="331" cy="323" r="10" fill="#76e7df"/>
+  <g transform="translate(-16 19)">
+    <circle cx="194" cy="310" r="57" fill="#20366f" fill-opacity=".38"/>
+    <circle cx="194" cy="304" r="55" fill="url(#coin)" stroke="#f5fbff" stroke-width="10"/>
+    <circle cx="194" cy="304" r="43" fill="none" stroke="#a4f3eb" stroke-opacity=".5" stroke-width="2.5"/>
+    <g transform="translate(-4 4)">
+      <path d="M168 322 187 304 199 313 229 277" fill="none" stroke="url(#chart)" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.5"/>
+      <path d="m215 282 14-5-2 15" fill="none" stroke="#dffefa" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>
     </g>
+  </g>
   </g>
 </svg>

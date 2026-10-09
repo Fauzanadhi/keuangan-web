@@ -1,6 +1,6 @@
 {
-  "name": "Rekap Keuangan",
-  "short_name": "Keuangan",
+  "name": "Pocket Flow",
+  "short_name": "Pocket Flow",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#e8eefb",

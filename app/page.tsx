@@ -292,7 +292,7 @@ function Login() {
   return (
     <main className="wrap">
       <form className="card login" onSubmit={submit}>
-        <h1>Rekap Keuangan</h1>
+        <h1>Pocket Flow</h1>
         <p>Masuk untuk melihat catatanmu.</p>
         <div className="field">
           <label htmlFor="id">Username</label>

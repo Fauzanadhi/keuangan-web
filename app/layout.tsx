@@ -3,7 +3,7 @@ import "./globals.css";
 import RegisterSW from "./register-sw";
 
 export const metadata: Metadata = {
-  title: "Rekap Keuangan",
+  title: "Pocket Flow",
   description: "Catat pemasukan dan pengeluaran harian, lihat rekap bulanannya.",
   manifest: "/manifest.json",
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
