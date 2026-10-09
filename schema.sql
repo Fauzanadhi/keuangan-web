@@ -4,7 +4,7 @@ create table public.transactions (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid default auth.uid() references auth.users(id) on delete cascade,
   date       date not null,
-  type       text not null check (type in ('in', 'out')),
+  type       text not null check (type in ('in', 'out', 'transfer')),
   amount     bigint not null check (amount > 0),
   category   text not null,
   note       text default '',

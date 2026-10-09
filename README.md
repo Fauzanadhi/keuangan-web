@@ -30,13 +30,13 @@ Push ke GitHub, import ke Vercel, isi dua environment variable yang sama dengan 
 
 ## Fitur tambahan (dompet, anggaran, PWA)
 - Jalankan `migrasi_fitur_baru.sql` sekali di Supabase SQL Editor (setelah `schema.sql`) untuk menambahkan dompet.
-- `migrasi_pindah_dana_investasi.sql` adalah migrasi historis untuk database lama. Fitur Pindah Dana dan jenis dompet Investasi tidak lagi tersedia di aplikasi; data transfer dan dompet lama tetap dipertahankan untuk menjaga saldo historis.
+- Jalankan `migrasi_pindah_dana.sql` setelah `migrasi_fitur_baru.sql` untuk mengaktifkan Pindah Dana antar dompet aktif. Pindah Dana hanya memindahkan saldo dan tidak dihitung sebagai pemasukan atau pengeluaran.
 - Jalankan `migrasi_kategori_dompet_arsip.sql` sekali setelah migrasi anggaran dan pindah dana untuk mengelola kategori pengeluaran dan mengarsipkan dompet sambil menjaga riwayat.
 - Untuk project yang sudah ada, jalankan `migrasi_kategori_pemasukan.sql` setelah migrasi di atas agar kategori pemasukan dapat dikelola dan disimpan per pengguna.
 - Jika project sudah memakai skema sebelumnya, jalankan `migrasi_anggaran_bulanan_wishlist.sql` sekali di Supabase SQL Editor. Migrasi menyalin anggaran bulanan lama ke bulan berjalan; seluruh data lama tetap di tabel `budgets`, sedangkan anggaran harian, mingguan, dan tahunan tidak disalin karena tidak memiliki padanan langsung pada model baru.
 - Setelah migrasi Wish List bulanan di atas, jalankan `migrasi_wishlist_selesai.sql` untuk mengaktifkan riwayat penyelesaian dan kaitan Wish List pada transaksi pengeluaran.
 - **Anggaran:** buka pintasan Anggaran di Beranda, pilih kategori, bulan, dan tahun, lalu atur batasnya. Diagram membandingkan anggaran dan pengeluaran pada bulan/tahun yang dipilih.
-- **Catat transaksi:** gunakan pintasan Beranda untuk membuka formulir transaksi dan ringkasan saldo per dompet. Pengeluaran menampilkan sisa anggaran untuk kategori dan bulan transaksi.
+- **Catat transaksi:** gunakan pintasan Beranda untuk membuka formulir transaksi dan ringkasan saldo per dompet. Pengeluaran menampilkan sisa anggaran untuk kategori dan bulan transaksi; Pindah Dana mengurangi saldo dompet asal dan menambah dompet tujuan tanpa mengubah total pemasukan/pengeluaran.
 - **Kategori:** menu Kategori digunakan untuk menambah atau menghapus kategori pemasukan dan pengeluaran. Kategori Investasi adalah kategori pengeluaran biasa dan dapat dihapus.
 - **Dompet:** pintasan Dompet membuka saldo serta rincian semua dompet dalam satu daftar. Dompet dapat dihapus dari daftar aktif dengan mengarsipkannya; riwayatnya tetap ada dan menandai dompet yang telah dihapus.
 - **Wish List:** simpan target barang, tandai selesai secara manual, atau pilih Wish List opsional saat mencatat pengeluaran. Pengeluaran terkait otomatis menyelesaikan Wish List dan mencatat nominal transaksi sebagai harga pembelian; barang selesai tetap terlihat di riwayat.
