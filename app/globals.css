@@ -27,9 +27,13 @@ button, input, select { font: inherit; color: inherit; }
 
 .main { padding: 24px; min-width: 0; width: 100%; max-width: 1180px; }
 .transaction-page { max-width: none; padding: 24px clamp(20px, 3vw, 48px); }
+.wallet-page { max-width: none; padding: 24px clamp(20px, 3vw, 48px); }
 .transaction-page-header { display: grid; grid-template-columns: 44px 1fr; align-items: center; gap: 12px; margin-bottom: 24px; }
 .transaction-page-header h1 { margin: 0; font-size: 27px; }
-.transaction-view { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.cols.transaction-view { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.transaction-form-card { grid-column: 1 / -1; }
+.transaction-form-card .seg { display: flex; }
+.transaction-form-card .seg button { flex: 1 1 0; min-width: 0; white-space: nowrap; }
 .home-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 22px; }
 .home-header h1 { margin: 0; font-size: clamp(25px, 4vw, 34px); line-height: 1.2; }
 .greeting { color: var(--muted); font-size: 15px; }
@@ -40,6 +44,10 @@ button, input, select { font: inherit; color: inherit; }
 .balance-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
 .balance-heading small { border: 1px solid rgba(255,255,255,.45); border-radius: 99px; padding: 7px 14px; text-transform: none; letter-spacing: 0; }
 .home-balance > strong { font-size: clamp(32px, 7vw, 52px); line-height: 1.1; }
+.investment-balance-card { display: flex; align-items: center; gap: 16px; padding: 18px 22px; margin: 14px 0 22px; background: #fff; border: 1px solid #d8e9e2; border-radius: 18px; box-shadow: var(--shadow); }
+.investment-balance-card > span { display: inline-flex; align-items: center; gap: 9px; color: var(--in); font-weight: 600; }
+.investment-balance-card > strong { margin-left: auto; font-size: 20px; }
+.investment-balance-card > button { border: 0; background: transparent; color: var(--accent); font-weight: 600; cursor: pointer; }
 .home-totals { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0 24px; }
 .total-tile { display: grid; grid-template-columns: 42px 1fr; align-items: center; gap: 4px 12px; padding: 18px; border: 1px solid transparent; border-radius: 20px; }
 .total-tile .total-icon { grid-row: span 2; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; font-size: 23px; font-weight: 700; }
@@ -115,6 +123,34 @@ button, input, select { font: inherit; color: inherit; }
 .budget-entry-actions { display: flex; gap: 12px; }
 .budget-entry-actions button { border: 0; background: none; color: var(--accent); font-weight: 600; cursor: pointer; }
 .budget-entry-actions button:last-child { color: var(--out); }
+.wallet-view { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.wallet-balance-panel, .wallet-investment-panel { min-width: 0; }
+.wallet-add-card { grid-column: 1 / -1; }
+.wallet-balance-panel h3, .wallet-investment-panel h3, .balance-group h3 { margin: 16px 0 4px; font-size: 14px; }
+.archived-wallet-title { padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); }
+.archived-wallet-entry { opacity: .72; }
+.wallet-entry button { border: 0; background: transparent; color: var(--out); cursor: pointer; font-weight: 600; white-space: nowrap; }
+.archived-wallet-entry button { color: var(--accent); }
+.balance-group { min-width: 0; }
+.category-manager .section-heading { margin-bottom: 10px; }
+.category-manager .section-heading h2 { margin: 0; }
+.category-manager .section-heading small { color: var(--muted); font-size: 12px; }
+.category-add-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin: 14px 0; }
+.category-add-form input { min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.category-add-form .btn { width: auto; white-space: nowrap; }
+.category-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.category-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 99px; font-size: 13px; }
+.category-chip button { width: 22px; height: 22px; border: 0; border-radius: 50%; background: #f8eaf0; color: var(--out); font-size: 16px; line-height: 1; cursor: pointer; }
+.investment-total { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; background: #e9f4f2; border: 1px solid #cce3df; border-radius: 16px; color: var(--in); }
+.investment-total strong { font-size: 20px; }
+.investment-total small { color: var(--muted); }
+.investment-total-large { flex-direction: column; align-items: flex-start; justify-content: center; }
+.wallet-entry { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 14px 0; border-top: 1px solid var(--line); }
+.wallet-entry > div { display: grid; }
+.wallet-entry small { color: var(--muted); }
+.wallet-add-card form { display: grid; gap: 4px; }
+.seg { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.seg button[aria-pressed="true"].transfer { background: var(--accent); color: #fff; }
 .category-budget-hint { margin-top: 4px; }
 .category-budget-hint .bar { margin: 3px 0 5px; height: 6px; }
 .category-budget-hint small, .category-budget-empty { color: var(--muted); font-size: 11px; }
@@ -233,7 +269,12 @@ details.adder summary { cursor: pointer; color: var(--accent); font-weight: 600;
   .navlist a, .navlist button { flex: 0 0 64px; flex-direction: column; gap: 2px; padding: 6px 2px; font-size: 10px; text-align: center; align-items: center; }
   .main { padding: 16px 14px 96px; }
   .transaction-page { padding: 18px 16px 28px; }
-  .transaction-view { grid-template-columns: minmax(0, 1fr); }
+  .wallet-page { padding: 18px 16px 28px; }
+  .cols.transaction-view, .cols.wallet-view { grid-template-columns: minmax(0, 1fr); }
+  .transaction-form-card, .wallet-add-card { grid-column: auto; }
+  .transaction-form-card .seg button { font-size: 12px; padding: 9px 4px; }
+  .category-add-form { grid-template-columns: minmax(0, 1fr); }
+  .category-add-form .btn { width: 100%; }
   .transaction-page-header { margin-bottom: 18px; }
   .budget-page { padding: 18px 16px 28px; }
   .budget-page-header { margin-bottom: 18px; }
@@ -252,6 +293,9 @@ details.adder summary { cursor: pointer; color: var(--accent); font-weight: 600;
   .home-header-actions .pick { max-width: 130px; padding: 9px 8px; }
   .home-header-actions .icon-button { width: 40px; height: 40px; }
   .home-balance { min-height: 160px; padding: 22px; border-radius: 22px; }
+  .investment-balance-card { flex-wrap: wrap; gap: 10px; padding: 14px; }
+  .investment-balance-card > strong { margin-left: auto; font-size: 16px; }
+  .investment-balance-card > button { width: 100%; text-align: right; }
   .home-totals { gap: 10px; margin: 12px 0 20px; }
   .total-tile { grid-template-columns: 36px 1fr; gap: 3px 8px; padding: 13px 10px; border-radius: 16px; font-size: 12px; }
   .total-tile .total-icon { width: 36px; height: 36px; }
