@@ -969,4 +969,32 @@ details.adder summary { cursor: pointer; color: var(--accent); font-weight: 600;
   .period-picker .pick { min-height: 32px; font-size: 11px; }
   .period-picker .period-month { width: 104px; }
   .period-picker .period-year { width: 76px; }
+  .main { animation: mobile-page-enter .2s ease-out both; }
+  .home-dashboard > * { animation: none; }
+  .home-dashboard::before,
+  .home-dashboard::after { animation: none; }
+  .home-balance::before { animation: none; }
+  .side,
+  .card,
+  .home-budget,
+  .home-chart,
+  .recent-card,
+  .transaction-summary .card,
+  .transaction-history-card,
+  .report-controls,
+  .report-summary .card,
+  .wishlist-card,
+  .category-settings,
+  .budget-list,
+  .budget-modal,
+  .account-dropdown,
+  .period-picker,
+  .period-options {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@keyframes mobile-page-enter {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
 }

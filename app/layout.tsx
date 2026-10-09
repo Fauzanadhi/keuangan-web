@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: "Rekap Keuangan",
   description: "Catat pemasukan dan pengeluaran harian, lihat rekap bulanannya.",
   manifest: "/manifest.json",
-  icons: { icon: "/icon-192.png", apple: "/icon-192.png" },
+  icons: { icon: "/icon.svg", apple: "/icon.svg" },
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#e8eefb" };
