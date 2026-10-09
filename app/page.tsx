@@ -1,23 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { isRecovery, linkExpired, supabase } from "@/lib/supabase";
 
 type Tx = { id: string; date: string; type: "in" | "out"; amount: number; category: string; note: string | null; wallet_id: string | null };
-type Budget = { category: string; amount: number; kind: "limit" | "target" };
+type Budget = { category: string; amount: number; kind: "limit" | "target"; month: number; year: number };
+type Wish = { id: string; name: string; target_amount: number };
 
 const IN_CATS = ["Deposit", "Gaji", "Lainnya"];
 const OUT_CATS = ["Jajan", "Jalan", "Kebutuhan", "Tanggungan", "Infaq", "Tabungan", "Lainnya"];
-const DEFAULT_BUDGETS: Budget[] = [
-  { category: "Jajan", amount: 200000, kind: "limit" },
-  { category: "Tabungan", amount: 150000, kind: "target" },
-];
+const MONTH_NAMES = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const COLORS = ["#2dd4a7", "#f59bb0", "#4a7bd8", "#9c98f2", "#fdbe2d", "#e03e6b", "#8a8fa8"];
 
 const rp = (n: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
+const rupiahInput = (value: string) => {
+  const digits = value.replace(/\D/g, "");
+  return digits ? new Intl.NumberFormat("id-ID").format(Number(digits)) : "";
+};
+const parseRupiah = (value: string) => Number(value.replace(/\D/g, ""));
 const pad = (n: number) => String(n).padStart(2, "0");
 const todayStr = () => {
   const d = new Date();
@@ -32,24 +35,28 @@ const monthLabel = (k: string, short = false) => {
 };
 const dateLabel = (s: string) =>
   new Date(s + "T00:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+const budgetRange = (month: number, year: number) => ({
+  from: `${year}-${pad(month)}-01`,
+  to: `${year}-${pad(month)}-${pad(new Date(year, month, 0).getDate())}`,
+});
 
 type Wallet = { id: string; name: string; kind: "cash" | "emoney" | "bank" };
-type Freq = "weekly" | "monthly";
-type Recurring = { id: string; type: "in" | "out"; amount: number; category: string; note: string | null; wallet_id: string | null; frequency: Freq; next_date: string };
 const KINDS = { cash: "Tunai", emoney: "E-money", bank: "Rekening" } as const;
-const addPeriod = (s: string, f: Freq) => {
-  const d = new Date(s + "T00:00:00");
-  if (f === "weekly") d.setDate(d.getDate() + 7);
-  else d.setMonth(d.getMonth() + 1);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
 
-const NAV = [
-  { id: "beranda", label: "Beranda", icon: "home" },
-  { id: "transaksi", label: "Transaksi", icon: "list" },
-  { id: "dompet", label: "Dompet", icon: "wallet" },
-  { id: "statistik", label: "Statistik", icon: "chart" },
-  { id: "berulang", label: "Berulang", icon: "repeat" },
+const NAV_GROUPS = [
+  { label: "Utama", items: [
+    { id: "beranda", label: "Beranda", icon: "home" },
+  ] },
+  { label: "", items: [
+    { id: "kelola-uang", label: "Kelola Uang", icon: "wallet" },
+  ] },
+  { label: "Laporan", items: [
+    { id: "statistik", label: "Statistik", icon: "chart" },
+  ] },
+  { label: "Akun", items: [
+    { id: "pengaturan", label: "Pengaturan", icon: "settings" },
+    { id: "keluar", label: "Keluar", icon: "logout", action: "logout" },
+  ] },
 ];
 
 function Icon({ n }: { n: string }) {
@@ -58,8 +65,12 @@ function Icon({ n }: { n: string }) {
     list: "M4 6h16M4 12h16M4 18h10",
     wallet: "M3 7a2 2 0 012-2h14v4M3 7v10a2 2 0 002 2h14a1 1 0 001-1V9a1 1 0 00-1-1H5a2 2 0 01-2-2zM16 14h2",
     chart: "M4 20V10M10 20V4M16 20v-7M22 20H2",
-    repeat: "M17 2l4 4-4 4M3 11V9a3 3 0 013-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 01-3 3H3",
     search: "M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-4.3-4.3",
+    budget: "M12 3v18M17 7H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6",
+    settings: "M12 8a4 4 0 100 8 4 4 0 000-8zM19.4 15a1.7 1.7 0 00.3 1.9l.1.1-1.7 2.9-.2-.1a1.7 1.7 0 00-1.8.2l-.1.1h-3.4l-.1-.2a1.7 1.7 0 00-1.5-1.1h-.2l-2.9-1.7.1-.2a1.7 1.7 0 00-.2-1.8l-.1-.1v-3.4l.2-.1a1.7 1.7 0 001.1-1.5v-.2l1.7-2.9.2.1a1.7 1.7 0 001.8-.2l.1-.1h3.4l.1.2a1.7 1.7 0 001.5 1.1h.2l2.9 1.7-.1.2a1.7 1.7 0 00.2 1.8l.1.1v3.4z",
+    logout: "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
+    menu: "M4 6h16M4 12h16M4 18h16",
+    wishlist: "M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 00-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 00-.1-7.8z",
   };
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -179,21 +190,39 @@ function Login() {
 
 function Dashboard({ session }: { session: Session }) {
   const [txs, setTxs] = useState<Tx[]>([]);
-  const [budgets, setBudgets] = useState<Budget[]>(DEFAULT_BUDGETS);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [wishes, setWishes] = useState<Wish[]>([]);
   const [month, setMonth] = useState(todayStr().slice(0, 7));
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [recurring, setRecurring] = useState<Recurring[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
   const [walletId, setWalletId] = useState("");
-  const [repeat, setRepeat] = useState<"" | Freq>("");
   const [newWallet, setNewWallet] = useState<{ name: string; kind: Wallet["kind"] }>({ name: "", kind: "cash" });
-  const ran = useRef(false);
   const [nav, setNav] = useState("beranda");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [more, setMore] = useState(false);
   const [username, setUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [budgetCategory, setBudgetCategory] = useState(OUT_CATS[0]);
+  const [budgetMonth, setBudgetMonth] = useState(new Date().getMonth() + 1);
+  const [budgetYear, setBudgetYear] = useState(new Date().getFullYear());
+  const [budgetAmount, setBudgetAmount] = useState("");
+  const [budgetEditing, setBudgetEditing] = useState<Budget | null>(null);
+  const [savingBudget, setSavingBudget] = useState(false);
+  const [budgetFormOpen, setBudgetFormOpen] = useState(false);
+  const [budgetFilter, setBudgetFilter] = useState("all");
+  const [viewBudgetMonth, setViewBudgetMonth] = useState(new Date().getMonth() + 1);
+  const [viewBudgetYear, setViewBudgetYear] = useState(new Date().getFullYear());
+  const [wishFormOpen, setWishFormOpen] = useState(false);
+  const [wishEditing, setWishEditing] = useState<Wish | null>(null);
+  const [wishName, setWishName] = useState("");
+  const [wishAmount, setWishAmount] = useState("");
+  const [savingWish, setSavingWish] = useState(false);
 
   // form
   const [type, setType] = useState<"in" | "out">("out");
@@ -221,38 +250,16 @@ function Dashboard({ session }: { session: Session }) {
     if (pf.data?.username) setUsername(pf.data.username);
     const w = await supabase.from("wallets").select("id,name,kind").order("created_at");
     setWallets((w.data ?? []) as Wallet[]);
-    const r = await supabase.from("recurring").select("*");
-    setRecurring(((r.data ?? []) as Recurring[]).map((x) => ({ ...x, amount: Number(x.amount) })));
-    const b = await supabase.from("budgets").select("category,amount,kind");
-    if (b.data && b.data.length) setBudgets(b.data.map((x) => ({ ...x, amount: Number(x.amount) }) as Budget));
+    const b = await supabase.from("category_budgets").select("category,amount,kind,month,year");
+    if (b.error) setError(b.error.message);
+    else setBudgets((b.data ?? []).map((x) => ({ ...x, amount: Number(x.amount) }) as Budget));
+    const wish = await supabase.from("wish_list").select("id,name,target_amount").order("created_at", { ascending: false });
+    if (wish.error) setError(wish.error.message);
+    else setWishes((wish.data ?? []).map((x) => ({ ...x, target_amount: Number(x.target_amount) })) as Wish[]);
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
-
-  // Buat transaksi dari jadwal berulang yang sudah jatuh tempo (sekali per kunjungan)
-  useEffect(() => {
-    if (ran.current || loading) return;
-    ran.current = true;
-    (async () => {
-      const t = todayStr();
-      let made = 0;
-      for (const r of recurring) {
-        const rows = [];
-        let d = r.next_date;
-        while (d <= t) {
-          rows.push({ date: d, type: r.type, amount: r.amount, category: r.category, note: r.note, wallet_id: r.wallet_id });
-          d = addPeriod(d, r.frequency);
-        }
-        if (!rows.length) continue;
-        const ins = await supabase.from("transactions").insert(rows);
-        if (ins.error) { setError(ins.error.message); continue; }
-        await supabase.from("recurring").update({ next_date: d }).eq("id", r.id);
-        made += rows.length;
-      }
-      if (made) load();
-    })();
-  }, [loading, recurring, load]);
 
   const months = useMemo(() => {
     const s = new Set(txs.map((t) => t.date.slice(0, 7)));
@@ -302,7 +309,7 @@ function Dashboard({ session }: { session: Session }) {
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
-    const amt = Number(amount.replace(/\D/g, ""));
+    const amt = parseRupiah(amount);
     if (!amt) { setError("Isi nominal lebih dari 0."); return; }
     setSaving(true);
     setError("");
@@ -312,10 +319,6 @@ function Dashboard({ session }: { session: Session }) {
       : await supabase.from("transactions").insert(row);
     if (error) setError(error.message);
     else {
-      if (repeat && !editId) {
-        const rr = await supabase.from("recurring").insert({ ...row, frequency: repeat, next_date: addPeriod(date, repeat) });
-        if (rr.error) setError(rr.error.message);
-      }
       resetForm();
       setMonth(date.slice(0, 7));
       await load();
@@ -323,11 +326,12 @@ function Dashboard({ session }: { session: Session }) {
     setSaving(false);
   }
 
-  function resetForm() { setAmount(""); setNote(""); setEditId(null); setRepeat(""); }
+  function resetForm() { setAmount(""); setNote(""); setEditId(null); }
 
   function startEdit(t: Tx) {
-    setEditId(t.id); setType(t.type); setDate(t.date); setAmount(String(t.amount));
-    setCategory(t.category); setNote(t.note ?? ""); setWalletId(t.wallet_id ?? ""); setRepeat("");
+    setEditId(t.id); setType(t.type); setDate(t.date); setAmount(rupiahInput(String(t.amount)));
+    setCategory(t.category); setNote(t.note ?? ""); setWalletId(t.wallet_id ?? "");
+    setNav("catat-transaksi");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -339,24 +343,26 @@ function Dashboard({ session }: { session: Session }) {
     else { setNewWallet({ ...newWallet, name: "" }); load(); }
   }
 
-  async function stopRecurring(id: string) {
-    await supabase.from("recurring").delete().eq("id", id);
-    setRecurring((p) => p.filter((x) => x.id !== id));
-  }
-
-  function exportCsv() {
-    const wname = (id: string | null) => wallets.find((w) => w.id === id)?.name ?? "";
-    const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-    const lines = [
-      "Tanggal;Jenis;Nominal;Kategori;Dompet;Catatan",
-      ...[...txs].reverse().map((t) =>
-        [t.date, t.type === "in" ? "Pemasukan" : "Pengeluaran", t.amount, t.category, wname(t.wallet_id), t.note ?? ""].map(esc).join(";")),
-    ];
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" }));
-    a.download = `rekap-keuangan-${todayStr()}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setPasswordMessage("Kata sandi minimal 6 karakter.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage("Konfirmasi kata sandi tidak sama.");
+      return;
+    }
+    setChangingPassword(true);
+    setPasswordMessage("");
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setChangingPassword(false);
+    if (error) setPasswordMessage(error.message);
+    else {
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordMessage("Kata sandi berhasil diubah.");
+    }
   }
 
   async function remove(t: Tx) {
@@ -366,16 +372,102 @@ function Dashboard({ session }: { session: Session }) {
     else setTxs((p) => p.filter((x) => x.id !== t.id));
   }
 
-  async function editBudget(b: Budget) {
-    const v = window.prompt(`${b.kind === "limit" ? "Batas" : "Target"} ${b.category} per bulan (Rp):`, String(b.amount));
-    if (v === null) return;
-    const amt = Number(v.replace(/\D/g, ""));
+  async function saveBudget(e: React.FormEvent) {
+    e.preventDefault();
+    const amount = parseRupiah(budgetAmount);
+    if (!amount) {
+      setError("Isi batas anggaran lebih dari 0.");
+      return;
+    }
+    setSavingBudget(true);
+    setError("");
     const { error } = await supabase
-      .from("budgets")
-      .upsert({ user_id: session.user.id, category: b.category, amount: amt, kind: b.kind }, { onConflict: "user_id,category" });
+      .from("category_budgets")
+      .upsert(
+        { user_id: session.user.id, category: budgetCategory, amount, kind: budgetEditing?.kind ?? "limit", month: budgetMonth, year: budgetYear },
+        { onConflict: "user_id,category,month,year" },
+      );
     if (error) setError(error.message);
-    else load();
-    setBudgets((p) => p.map((x) => (x.category === b.category ? { ...x, amount: amt } : x)));
+    else {
+      setBudgetFilter(budgetCategory);
+      setViewBudgetMonth(budgetMonth);
+      setViewBudgetYear(budgetYear);
+      cancelBudgetEdit();
+      setBudgetFormOpen(false);
+      await load();
+    }
+    setSavingBudget(false);
+  }
+
+  function startEditBudget(budget: Budget) {
+    setBudgetEditing(budget);
+    setBudgetCategory(budget.category);
+    setBudgetMonth(budget.month);
+    setBudgetYear(budget.year);
+    setBudgetAmount(rupiahInput(String(budget.amount)));
+  }
+
+  function cancelBudgetEdit() {
+    setBudgetEditing(null);
+    setBudgetAmount("");
+    setBudgetCategory(OUT_CATS[0]);
+    setBudgetMonth(new Date().getMonth() + 1);
+    setBudgetYear(new Date().getFullYear());
+  }
+
+  function openNewBudget() {
+    cancelBudgetEdit();
+    setBudgetFormOpen(true);
+  }
+
+  async function removeBudget(budget: Budget) {
+    if (!window.confirm(`Hapus anggaran ${budget.category} ${MONTH_NAMES[budget.month - 1]} ${budget.year}?`)) return;
+    const { error } = await supabase
+      .from("category_budgets")
+      .delete()
+      .eq("category", budget.category)
+      .eq("month", budget.month)
+      .eq("year", budget.year);
+    if (error) setError(error.message);
+    else await load();
+  }
+
+  async function saveWish(e: React.FormEvent) {
+    e.preventDefault();
+    const target = parseRupiah(wishAmount);
+    if (!wishName.trim() || !target) {
+      setError("Isi nama barang dan harga target lebih dari 0.");
+      return;
+    }
+    setSavingWish(true);
+    setError("");
+    const query = wishEditing
+      ? supabase.from("wish_list").update({ name: wishName.trim(), target_amount: target }).eq("id", wishEditing.id)
+      : supabase.from("wish_list").insert({ user_id: session.user.id, name: wishName.trim(), target_amount: target });
+    const { error } = await query;
+    if (error) setError(error.message);
+    else {
+      setWishFormOpen(false);
+      setWishEditing(null);
+      setWishName("");
+      setWishAmount("");
+      await load();
+    }
+    setSavingWish(false);
+  }
+
+  function editWish(wish: Wish) {
+    setWishEditing(wish);
+    setWishName(wish.name);
+    setWishAmount(rupiahInput(String(wish.target_amount)));
+    setWishFormOpen(true);
+  }
+
+  async function removeWish(wish: Wish) {
+    if (!window.confirm(`Hapus "${wish.name}" dari Wish List?`)) return;
+    const { error } = await supabase.from("wish_list").delete().eq("id", wish.id);
+    if (error) setError(error.message);
+    else setWishes((items) => items.filter((item) => item.id !== wish.id));
   }
 
   const uname = username || (session.user.email ?? "").split("@")[0];
@@ -385,54 +477,404 @@ function Dashboard({ session }: { session: Session }) {
   const totalOut = byCat.reduce((a, c) => a + c.value, 0);
   const topPct = topCat && totalOut ? Math.round((topCat.value / totalOut) * 100) : 0;
   const axis = { tickLine: false, axisLine: false, fontSize: 12 } as const;
+  const budgetOverview = budgets.filter((b) => b.month === Number(month.slice(5)) && b.year === Number(month.slice(0, 4))).map((b) => {
+    const range = budgetRange(b.month, b.year);
+    const used = txs.filter((t) => t.type === "out" && t.category === b.category && t.date >= range.from && t.date <= range.to).reduce((a, t) => a + t.amount, 0);
+    return { ...b, ...range, used, pct: b.amount ? Math.min(100, (used / b.amount) * 100) : 0 };
+  });
+  const visibleBudgets = budgets
+    .filter((b) => b.month === viewBudgetMonth && b.year === viewBudgetYear && (budgetFilter === "all" || b.category === budgetFilter))
+    .map((b) => {
+      const range = budgetRange(b.month, b.year);
+      const used = txs.filter((t) => t.type === "out" && t.category === b.category && t.date >= range.from && t.date <= range.to).reduce((a, t) => a + t.amount, 0);
+      return { ...b, ...range, used, pct: b.amount ? Math.min(100, (used / b.amount) * 100) : 0 };
+    });
+  const budgetDateRange = budgetRange(viewBudgetMonth, viewBudgetYear);
+  const chartTransactions = txs.filter((t) =>
+    t.type === "out" && t.date >= budgetDateRange.from && t.date <= budgetDateRange.to && (budgetFilter === "all" || t.category === budgetFilter),
+  );
+  const chartBudgets = budgets.filter((budget) => budget.month === viewBudgetMonth && budget.year === viewBudgetYear && (budgetFilter === "all" || budget.category === budgetFilter));
+  const budgetByCategory = chartBudgets.reduce(
+    (totals, budget) => totals.set(budget.category, (totals.get(budget.category) ?? 0) + budget.amount),
+    new Map<string, number>(),
+  );
+  const spentByCategory = chartTransactions.reduce(
+    (totals, transaction) => totals.set(transaction.category, (totals.get(transaction.category) ?? 0) + transaction.amount),
+    new Map<string, number>(),
+  );
+  const budgetChart = Array.from(new Set([...budgetByCategory.keys(), ...spentByCategory.keys()]))
+    .map((name) => ({ name, budget: budgetByCategory.get(name) ?? 0, spent: spentByCategory.get(name) ?? 0 }))
+    .sort((a, b) => b.spent - a.spent || b.budget - a.budget);
+  const budgetChartBudgetTotal = budgetChart.reduce((sum, item) => sum + item.budget, 0);
+  const budgetChartSpentTotal = budgetChart.reduce((sum, item) => sum + item.spent, 0);
+  const selectedCategoryBudget = type === "out"
+    ? budgets.find((b) => b.category === category && b.month === Number(date.slice(5, 7)) && b.year === Number(date.slice(0, 4)))
+    : undefined;
+  const selectedCategorySpent = selectedCategoryBudget
+    ? txs.filter((t) => t.type === "out" && t.category === category && t.date.slice(0, 7) === `${selectedCategoryBudget.year}-${pad(selectedCategoryBudget.month)}`).reduce((sum, t) => sum + t.amount, 0)
+    : 0;
+  const selectedCategoryPct = selectedCategoryBudget ? Math.min(100, (selectedCategorySpent / selectedCategoryBudget.amount) * 100) : 0;
+  const miniSeries = series.slice(-6);
+  const balanceSummary = (
+    <section className="card">
+      <h2>Saldo dan dompet</h2>
+      <div className="pcard">
+        <small>Saldo saat ini</small>
+        <div className="big">{rp(saldo)}</div>
+        <div className="row"><span>{uname}</span><span>{monthLabel(month, true)}</span></div>
+      </div>
+      {walletBal.map((w) => (
+        <div className="tx" key={w.id}>
+          <div><div className="cat">{w.name}</div><div className="meta">{w.kind}</div></div>
+          <div className="amt">{rp(w.bal)}</div>
+        </div>
+      ))}
+    </section>
+  );
+  const transactionEntry = (
+    <section className="card">
+      <h2 id="form-transaksi">{editId ? "Ubah transaksi" : "Catat transaksi"}</h2>
+      <form onSubmit={add}>
+        <div className="seg" role="group" aria-label="Jenis transaksi">
+          <button type="button" className="out" aria-pressed={type === "out"} onClick={() => switchType("out")}>Pengeluaran</button>
+          <button type="button" className="in" aria-pressed={type === "in"} onClick={() => switchType("in")}>Pemasukan</button>
+        </div>
+        <div className="row2">
+          <div className="field">
+            <label htmlFor="amt">Nominal (Rp)</label>
+            <input id="amt" inputMode="numeric" placeholder="15.000" value={amount} onChange={(e) => setAmount(rupiahInput(e.target.value))} />
+          </div>
+          <div className="field">
+            <label htmlFor="date">Tanggal</label>
+            <input id="date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="cat">Kategori</label>
+          <select id="cat" value={category} onChange={(e) => setCategory(e.target.value)}>
+            {(type === "in" ? IN_CATS : OUT_CATS).map((c) => <option key={c}>{c}</option>)}
+          </select>
+          {type === "out" && selectedCategoryBudget && (
+            <div className="category-budget-hint">
+              <div className="bar" role="progressbar" aria-valuenow={Math.round(selectedCategoryPct)} aria-valuemin={0} aria-valuemax={100} aria-label={`Anggaran ${category}`}>
+                <i className={selectedCategorySpent > selectedCategoryBudget.amount ? "over" : ""} style={{ width: `${selectedCategoryPct}%` }} />
+              </div>
+              <small>Sisa anggaran {MONTH_NAMES[selectedCategoryBudget.month - 1]}: {rp(Math.max(0, selectedCategoryBudget.amount - selectedCategorySpent))} dari {rp(selectedCategoryBudget.amount)}</small>
+            </div>
+          )}
+          {type === "out" && !selectedCategoryBudget && <small className="category-budget-empty">Belum ada anggaran untuk kategori ini pada bulan transaksi.</small>}
+        </div>
+        <div className="field">
+          <label htmlFor="note">Catatan</label>
+          <input id="note" placeholder="mis. bensin, maksi" value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="wal">Dompet</label>
+          <select id="wal" value={walletId} onChange={(e) => setWalletId(e.target.value)}>
+            <option value="">Tanpa dompet</option>
+            {wallets.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select>
+        </div>
+        <button className="btn" disabled={saving}>{saving ? "Menyimpan..." : editId ? "Simpan perubahan" : "Simpan transaksi"}</button>
+        {editId && <button type="button" className="btn ghost" style={{ marginTop: 8, width: "100%" }} onClick={resetForm}>Batal</button>}
+      </form>
+    </section>
+  );
 
   return (
-    <div className="shell">
-      <aside className="side">
+    <div className={`shell ${nav === "anggaran" ? "budget-shell" : ""} ${sidebarOpen ? "" : "sidebar-collapsed"} ${nav === "catat-transaksi" ? "transaction-shell" : ""}`}>
+      {nav !== "anggaran" && nav !== "catat-transaksi" && sidebarOpen && <aside className="side">
         <div className="profile">
           <div className="avatar" aria-hidden="true">{(uname[0] ?? "?").toUpperCase()}</div>
           <b>{uname}</b>
         </div>
         <nav className="navlist" aria-label="Menu utama">
-          {NAV.map((n) => (
-            <a key={n.id} href={`#${n.id}`} aria-current={nav === n.id} onClick={() => setNav(n.id)}>
-              <Icon n={n.icon} /><span>{n.label}</span>
-            </a>
+          {NAV_GROUPS.map((group) => (
+            <div className="navgroup" key={group.label}>
+              {group.label && <b className="navgroup-title">{group.label}</b>}
+              <div className="navitems">
+                {group.items.map((item) => "action" in item ? (
+                  <button
+                    className="nav-action"
+                    key={item.id}
+                    type="button"
+                    onClick={() => supabase.auth.signOut()}
+                  >
+                    <Icon n={item.icon} /><span>{item.label}</span>
+                  </button>
+                ) : (
+                  <button key={item.id} type="button" aria-current={nav === item.id} onClick={() => setNav(item.id)}>
+                    <Icon n={item.icon} /><span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
-        <div className="side-actions">
-          <button className="btn ghost" onClick={exportCsv}>Ekspor CSV</button>
-          <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Keluar</button>
-        </div>
-      </aside>
+      </aside>}
 
-      <main className="main" id="beranda">
-        <header className="hdr">
+      <main className={`main ${nav === "anggaran" ? "budget-page" : ""} ${nav === "catat-transaksi" ? "transaction-page" : ""}`}>
+        {nav === "anggaran" ? (
+          <header className="budget-page-header">
+            <button className="budget-back" type="button" onClick={() => setNav("beranda")} aria-label="Kembali ke Beranda">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12" /></svg>
+            </button>
+            <h1>Anggaran</h1>
+            <button className="budget-add" type="button" onClick={openNewBudget} aria-label="Tambah anggaran">+</button>
+          </header>
+        ) : nav === "catat-transaksi" ? (
+          <header className="transaction-page-header">
+            <button className="budget-back" type="button" onClick={() => setNav("beranda")} aria-label="Kembali ke Beranda">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12" /></svg>
+            </button>
+            <h1>Catat Transaksi</h1>
+          </header>
+        ) : <header className="home-header">
           <div>
-            <h1>Halo, {uname}</h1>
-            <p>Selamat {sapa}</p>
+            <div className="greeting">Selamat {sapa}, {uname}</div>
+            <h1>{nav === "beranda" ? "Beranda" : nav === "kelola-uang" ? "Kelola Uang" : nav === "catat-transaksi" ? "Catat Transaksi" : nav === "wishlist" ? "Wish List" : nav === "statistik" ? "Statistik" : "Pengaturan"}</h1>
           </div>
-          <div className="hdr-tools">
-            <label className="searchbox">
-              <span className="sr">Cari transaksi</span>
-              <input placeholder="Cari kategori atau catatan" value={search} onChange={(e) => setSearch(e.target.value)} />
-              <Icon n="search" />
-            </label>
-            <select className="pick" aria-label="Pilih bulan" value={month} onChange={(e) => setMonth(e.target.value)}>
+          <div className="home-header-actions">
+            {["beranda", "statistik", "kelola-uang", "catat-transaksi"].includes(nav) && <select className="pick" aria-label="Pilih bulan" value={month} onChange={(e) => setMonth(e.target.value)}>
               {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
-            </select>
-            <div className="only-mobile">
-              <button className="btn ghost" onClick={exportCsv}>Ekspor CSV</button>
-              <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Keluar</button>
-            </div>
+            </select>}
+            <button className="icon-button" type="button" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label={sidebarOpen ? "Sembunyikan menu" : "Tampilkan menu"}><Icon n="menu" /></button>
+            <button className="icon-button" type="button" onClick={() => setNav("pengaturan")} aria-label="Buka pengaturan"><Icon n="settings" /></button>
           </div>
-        </header>
+        </header>}
 
         {error && <p className="err" role="alert">{error}</p>}
 
-        <div className="cols">
-          <div className="col">
-<section className="card" id="dompet">
+        {nav === "anggaran" && <>
+          <div className="budget-month-picker" aria-label="Pilih bulan anggaran">
+            <select className="pick" aria-label="Bulan anggaran" value={viewBudgetMonth} onChange={(e) => setViewBudgetMonth(Number(e.target.value))}>
+              {MONTH_NAMES.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}
+            </select>
+            <input className="pick budget-year" aria-label="Tahun anggaran" type="number" min="2000" max="2100" value={viewBudgetYear} onChange={(e) => setViewBudgetYear(Number(e.target.value))} />
+          </div>
+          <section className="budget-overview">
+            <div className="budget-donut">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={budgetChart.filter((item) => item.spent > 0)} dataKey="spent" nameKey="name" innerRadius="70%" outerRadius="96%" paddingAngle={2} stroke="none">
+                    {budgetChart.filter((item) => item.spent > 0).map((item) => (
+                      <Cell key={item.name} fill={COLORS[budgetChart.findIndex((row) => row.name === item.name) % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Pie data={budgetChart.filter((item) => item.budget > 0)} dataKey="budget" nameKey="name" innerRadius="44%" outerRadius="66%" paddingAngle={2} stroke="none">
+                    {budgetChart.filter((item) => item.budget > 0).map((item) => (
+                      <Cell key={item.name} fill={COLORS[budgetChart.findIndex((row) => row.name === item.name) % COLORS.length]} fillOpacity={0.55} />
+                    ))}
+                  </Pie>
+                  {budgetChartSpentTotal === 0 && <Pie data={[{ name: "Tidak ada pengeluaran", value: 1 }]} dataKey="value" innerRadius="70%" outerRadius="96%" stroke="none"><Cell fill="#e9eaf2" /></Pie>}
+                  {budgetChartBudgetTotal === 0 && <Pie data={[{ name: "Belum ada anggaran", value: 1 }]} dataKey="value" innerRadius="44%" outerRadius="66%" stroke="none"><Cell fill="#d9dbe8" /></Pie>}
+                  <Tooltip formatter={(value: number) => rp(value)} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="budget-donut-center">
+                <strong>{rp(budgetChartSpentTotal)} / {rp(budgetChartBudgetTotal)}</strong>
+              </div>
+            </div>
+            <div className="budget-chart-legend">
+              {budgetChart.length
+                ? <>
+                  <div className="budget-chart-legend-key"><span><i className="spent-key" />Pengeluaran</span><span><i className="budget-key" />Anggaran</span></div>
+                  {budgetChart.map((item, index) => (
+                    <span className="budget-chart-category" key={item.name}>
+                      <i style={{ background: COLORS[index % COLORS.length] }} />
+                      <span>{item.name}</span>
+                      <b>{rp(item.spent)} / {rp(item.budget)}</b>
+                    </span>
+                  ))}
+                </>
+                : <p className="empty">Belum ada anggaran atau pengeluaran pada bulan ini.</p>}
+            </div>
+          </section>
+
+          <div className="budget-period-tabs" role="tablist" aria-label="Kategori anggaran">
+            {(["all", ...OUT_CATS] as const).map((item) => (
+              <button key={item} type="button" role="tab" aria-selected={budgetFilter === item} onClick={() => setBudgetFilter(item)}>{item === "all" ? "Semua" : item}</button>
+            ))}
+          </div>
+
+          <section className="budget-list">
+            <h2>Anggaran aktif</h2>
+            {visibleBudgets.length === 0 ? (
+              <p className="empty">Belum ada anggaran untuk kategori dan bulan ini. Tekan + untuk menambahkan.</p>
+            ) : visibleBudgets.map((budget) => {
+              const over = budget.kind === "limit" && budget.used > budget.amount;
+              const near = budget.kind === "limit" && budget.pct >= 80;
+              return (
+                <article className="budget-entry" key={`${budget.category}-${budget.month}-${budget.year}`}>
+                  <div className="budget-entry-heading">
+                    <div><strong>{budget.category}</strong><small>{MONTH_NAMES[budget.month - 1]} {budget.year}</small></div>
+                    <strong>{rp(budget.used)} <small>/ {rp(budget.amount)}</small></strong>
+                  </div>
+                  <div className="bar" role="progressbar" aria-valuenow={Math.round(budget.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${budget.category} ${MONTH_NAMES[budget.month - 1]} ${budget.year}`}>
+                    <i className={over ? "over" : budget.kind === "target" && budget.used >= budget.amount ? "done" : ""} style={{ width: `${budget.pct}%` }} />
+                  </div>
+                  <div className="budget-entry-footer">
+                    <span className={over ? "budget-alert" : ""}>{over ? `Melewati batas ${rp(budget.used - budget.amount)}` : near ? "Hampir mencapai batas" : budget.kind === "target" && budget.used >= budget.amount ? "Target tercapai" : `Sisa ${rp(Math.max(0, budget.amount - budget.used))}`}</span>
+                    <span className="budget-entry-actions">
+                      <button type="button" onClick={() => { startEditBudget(budget); setBudgetFormOpen(true); }}>Ubah</button>
+                      <button type="button" onClick={() => removeBudget(budget)}>Hapus</button>
+                    </span>
+                  </div>
+                </article>
+              );
+            })}
+          </section>
+
+          {budgetFormOpen && <div className="budget-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) { setBudgetFormOpen(false); cancelBudgetEdit(); } }}>
+            <section className="budget-modal" role="dialog" aria-modal="true" aria-labelledby="budget-modal-title">
+              <div className="section-heading">
+                <h2 id="budget-modal-title">{budgetEditing ? "Ubah anggaran" : "Tambah anggaran"}</h2>
+                <button type="button" className="modal-close" onClick={() => { setBudgetFormOpen(false); cancelBudgetEdit(); }} aria-label="Tutup">×</button>
+              </div>
+              <form onSubmit={saveBudget}>
+                <div className="field">
+                  <label htmlFor="budget-category">Kategori pengeluaran</label>
+                  <select id="budget-category" value={budgetCategory} disabled={!!budgetEditing} onChange={(e) => setBudgetCategory(e.target.value)}>
+                    {OUT_CATS.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="budget-month">Bulan</label>
+                  <select id="budget-month" value={budgetMonth} disabled={!!budgetEditing} onChange={(e) => setBudgetMonth(Number(e.target.value))}>
+                    {MONTH_NAMES.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="budget-year">Tahun</label>
+                  <input id="budget-year" type="number" min="2000" max="2100" required disabled={!!budgetEditing} value={budgetYear} onChange={(e) => setBudgetYear(Number(e.target.value))} />
+                </div>
+                <div className="field">
+                  <label htmlFor="budget-amount">Batas anggaran (Rp)</label>
+                  <input id="budget-amount" inputMode="numeric" placeholder="mis. 50.000" required value={budgetAmount} onChange={(e) => setBudgetAmount(rupiahInput(e.target.value))} />
+                </div>
+                <button className="btn" disabled={savingBudget}>{savingBudget ? "Menyimpan..." : budgetEditing ? "Simpan perubahan" : "Simpan anggaran"}</button>
+              </form>
+            </section>
+          </div>}
+        </>}
+
+        {nav === "beranda" && <>
+        <section className="home-balance">
+          <div className="balance-heading"><span>Total saldo</span><small>{monthLabel(month)}</small></div>
+          <strong>{rp(saldo)}</strong>
+        </section>
+
+        <div className="home-totals">
+          <section className="total-tile income-tile">
+            <span className="total-icon">↗</span><span>Pendapatan</span>
+            <strong>{rp(inM)}</strong>
+          </section>
+          <section className="total-tile expense-tile">
+            <span className="total-icon">↘</span><span>Pengeluaran</span>
+            <strong>{rp(outM)}</strong>
+          </section>
+        </div>
+
+        <nav className="home-shortcuts" aria-label="Pintasan">
+          <button type="button" onClick={() => setNav("anggaran")}><span className="shortcut-icon budget-shortcut"><Icon n="budget" /></span>Anggaran</button>
+          <button type="button" onClick={() => { setNav("catat-transaksi"); setEditId(null); }}><span className="shortcut-icon add-shortcut">+</span>Catat transaksi</button>
+          <button type="button" onClick={() => setNav("kelola-uang")}><span className="shortcut-icon wallet-shortcut"><Icon n="wallet" /></span>Dompet</button>
+          <button type="button" onClick={() => setNav("wishlist")}><span className="shortcut-icon wishlist-shortcut"><Icon n="wishlist" /></span>Wish List</button>
+        </nav>
+
+        <section className="card recent-card" id="transaksi">
+          <div className="section-heading recent-heading">
+            <h2>Transaksi terbaru</h2>
+            <label className="recent-search">
+              <span className="sr">Cari transaksi</span>
+              <input placeholder="Cari transaksi" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Icon n="search" />
+            </label>
+          </div>
+          {loading ? (
+            <p className="empty">Memuat...</p>
+          ) : shown.length === 0 ? (
+            <p className="empty">Belum ada transaksi untuk periode ini.</p>
+          ) : (
+            shown.slice(0, more ? shown.length : 5).map((t) => (
+              <div className="tx" key={t.id}>
+                <div>
+                  <div className="cat">{t.category}{t.note ? ` · ${t.note}` : ""}</div>
+                  <div className="meta">{dateLabel(t.date)}{t.wallet_id ? ` · ${wallets.find((w) => w.id === t.wallet_id)?.name ?? ""}` : ""}</div>
+                </div>
+                <div className={`amt ${t.type}`}>{t.type === "in" ? "+" : "-"}{rp(t.amount)}</div>
+                <span className="transaction-actions">
+                  <button className="del" onClick={() => startEdit(t)}>Ubah</button>
+                  <button className="del" onClick={() => remove(t)}>Hapus</button>
+                </span>
+              </div>
+            ))
+          )}
+          {shown.length > 5 && <button className="btn ghost see-all" onClick={() => setMore(!more)}>{more ? "Tampilkan lebih sedikit" : `Lihat semua (${shown.length})`}</button>}
+        </section>
+
+        <div className="home-grid">
+          <section className="card home-budget">
+            <div className="section-heading">
+              <h2>Anggaran berjalan</h2>
+              <button type="button" onClick={() => setNav("anggaran")}>Kelola</button>
+            </div>
+            {budgetOverview.length === 0 ? (
+              <p className="empty">Belum ada anggaran.</p>
+            ) : budgetOverview.map((b) => {
+              const over = b.kind === "limit" && b.used > b.amount;
+              const near = b.kind === "limit" && b.pct >= 80;
+              return (
+                <div className="budget" key={b.category}>
+                  <div className="head">
+                    <strong>{b.category}</strong>
+                    <span className={over ? "budget-alert" : ""}>{over ? "Melewati batas" : near ? "Hampir mencapai batas" : `${rp(b.used)} / ${rp(b.amount)}`}</span>
+                  </div>
+                  <div className="bar" role="progressbar" aria-valuenow={Math.round(b.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`Anggaran ${b.category}`}>
+                    <i className={over ? "over" : b.kind === "target" && b.used >= b.amount ? "done" : ""} style={{ width: `${b.pct}%` }} />
+                  </div>
+                  <div className="msg">{b.kind === "target"
+                    ? b.used >= b.amount ? "Target tercapai." : `Kurang ${rp(b.amount - b.used)} lagi.`
+                    : over ? `Lewat ${rp(b.used - b.amount)} dari batas.` : `Sisa ${rp(b.amount - b.used)}.`}</div>
+                </div>
+              );
+            })}
+          </section>
+
+          <section className="card home-chart">
+            <div className="section-heading">
+              <h2>Arus kas</h2>
+              <button type="button" onClick={() => setNav("statistik")}>Detail</button>
+            </div>
+            {miniSeries.length === 0 ? <p className="empty">Grafik akan muncul setelah ada transaksi.</p> : (
+              <>
+                <div className="legend row">
+                  <span><i style={{ background: "var(--in)" }} />Pemasukan</span>
+                  <span><i style={{ background: "var(--out)" }} />Pengeluaran</span>
+                </div>
+                <div className="mini-chart">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={miniSeries}>
+                      <CartesianGrid vertical={false} stroke="#ece7da" />
+                      <XAxis dataKey="bulan" {...axis} />
+                      <YAxis hide />
+                      <Tooltip formatter={(v: number) => rp(v)} />
+                      <Line type="monotone" dataKey="Pemasukan" stroke="#12b886" strokeWidth={3} dot={false} />
+                      <Line type="monotone" dataKey="Pengeluaran" stroke="#ee4a74" strokeWidth={3} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+        </>}
+
+        {nav !== "beranda" && nav !== "anggaran" && <>
+        {nav !== "catat-transaksi" && <h2 className="page-section-title">{nav === "kelola-uang" ? "Kelola Uang" : nav === "wishlist" ? "Wish List" : nav === "statistik" ? "Statistik" : "Pengaturan akun"}</h2>}
+        <div className={`cols ${nav === "kelola-uang" ? "manage-view" : nav === "catat-transaksi" ? "transaction-view" : nav === "statistik" ? "stats-view" : "settings-view"}`}>
+          {nav === "kelola-uang" && <div className="col">
+<section className="card">
           <h2>Dompet</h2>
           <div className="pcard">
             <small>Saldo saat ini</small>
@@ -456,95 +898,28 @@ function Dashboard({ session }: { session: Session }) {
             <button className="btn ghost" style={{ width: "100%" }}>Tambah dompet</button>
           </form></details>
         </section>
-<section className="card">
-          <h2>{editId ? "Ubah transaksi" : "Catat transaksi"}</h2>
-          <form onSubmit={add}>
-            <div className="seg" role="group" aria-label="Jenis transaksi">
-              <button type="button" className="out" aria-pressed={type === "out"} onClick={() => switchType("out")}>Pengeluaran</button>
-              <button type="button" className="in" aria-pressed={type === "in"} onClick={() => switchType("in")}>Pemasukan</button>
-            </div>
-            <div className="row2">
-              <div className="field">
-                <label htmlFor="amt">Nominal (Rp)</label>
-                <input id="amt" inputMode="numeric" placeholder="15000" value={amount} onChange={(e) => setAmount(e.target.value)} />
-              </div>
-              <div className="field">
-                <label htmlFor="date">Tanggal</label>
-                <input id="date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
-            </div>
-            <div className="field">
-              <label htmlFor="cat">Kategori</label>
-              <select id="cat" value={category} onChange={(e) => setCategory(e.target.value)}>
-                {(type === "in" ? IN_CATS : OUT_CATS).map((c) => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="note">Catatan</label>
-              <input id="note" placeholder="mis. bensin, maksi" value={note} onChange={(e) => setNote(e.target.value)} />
-            </div>
-            <div className="row2">
-              <div className="field">
-                <label htmlFor="wal">Dompet</label>
-                <select id="wal" value={walletId} onChange={(e) => setWalletId(e.target.value)}>
-                  <option value="">Tanpa dompet</option>
-                  {wallets.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </div>
-              {!editId && (
-                <div className="field">
-                  <label htmlFor="rep">Ulangi</label>
-                  <select id="rep" value={repeat} onChange={(e) => setRepeat(e.target.value as "" | Freq)}>
-                    <option value="">Tidak</option>
-                    <option value="weekly">Tiap minggu</option>
-                    <option value="monthly">Tiap bulan</option>
-                  </select>
-                </div>
-              )}
-            </div>
-            <button className="btn" disabled={saving}>{saving ? "Menyimpan..." : editId ? "Simpan perubahan" : "Simpan transaksi"}</button>
-            {editId && <button type="button" className="btn ghost" style={{ marginTop: 8, width: "100%" }} onClick={resetForm}>Batal</button>}
-          </form>
-        </section>
-<section className="card" id="transaksi">
-          <h2>Transaksi <small>{monthLabel(month)}</small></h2>
-          {loading ? (
-            <p className="empty">Memuat...</p>
-          ) : shown.length === 0 ? (
-            <p className="empty">Belum ada transaksi. Catat yang pertama lewat formulir di atas.</p>
-          ) : (
-            shown.slice(0, more ? 500 : 8).map((t) => (
-              <div className="tx" key={t.id}>
-                <div>
-                  <div className="cat">{t.category}{t.note ? ` · ${t.note}` : ""}</div>
-                  <div className="meta">{dateLabel(t.date)}{t.wallet_id ? ` · ${wallets.find((w) => w.id === t.wallet_id)?.name ?? ""}` : ""}</div>
-                </div>
-                <div className={`amt ${t.type}`}>{t.type === "in" ? "+" : "-"}{rp(t.amount)}</div>
-                <span style={{ justifySelf: "end", display: "flex", gap: 12 }}>
-                  <button className="del" onClick={() => startEdit(t)}>Ubah</button>
-                  <button className="del" onClick={() => remove(t)}>Hapus</button>
-                </span>
-              </div>
-            ))
-          )}
-        {shown.length > 8 && <button className="btn ghost" style={{ width: "100%" }} onClick={() => setMore(!more)}>{more ? "Tampilkan lebih sedikit" : `Lihat semua (${shown.length})`}</button>}
-        </section>
-          </div>
+  </div>}
 
-          <div className="col">
-            <section className="card">
-              <h2>Ringkasan <small>{monthLabel(month)}</small></h2>
-              <div className="pair">
-                <div><small>Pemasukan</small><b className="in">{rp(inM)}</b></div>
-                <div><small>Pengeluaran</small><b className="out">{rp(outM)}</b></div>
-              </div>
-              <p className="note">
-                <strong>CATATAN</strong><br />
-                {topCat ? `Pengeluaran terbesar bulan ini ada di ${topCat.name} (${rp(topCat.value)}, ${topPct}%).` : "Belum ada pengeluaran di bulan ini."}
-                {outM > inM && inM > 0 ? " Pengeluaran sudah melebihi pemasukan." : ""}
-              </p>
-            </section>
+  {nav === "catat-transaksi" && <>{balanceSummary}{transactionEntry}</>}
 
+  {nav === "wishlist" && <section className="card wishlist-card">
+    <div className="section-heading">
+      <h2>Daftar keinginan</h2>
+      <button type="button" onClick={() => { setWishEditing(null); setWishName(""); setWishAmount(""); setWishFormOpen(true); }}>+ Tambah</button>
+    </div>
+    {wishes.length === 0 ? <p className="empty">Belum ada barang di Wish List. Tambahkan nama barang dan harga targetnya.</p> : wishes.map((wish) => (
+      <article className="wishlist-entry" key={wish.id}>
+        <div><strong>{wish.name}</strong><small>Target harga</small></div>
+        <b>{rp(wish.target_amount)}</b>
+        <span className="budget-entry-actions">
+          <button type="button" onClick={() => editWish(wish)}>Ubah</button>
+          <button type="button" onClick={() => removeWish(wish)}>Hapus</button>
+        </span>
+      </article>
+    ))}
+  </section>}
+
+          {nav === "statistik" && <div className="col">
             <section className="card" id="statistik">
               <h2>Kategori <small>Pengeluaran {monthLabel(month)}</small></h2>
               {byCat.length === 0 ? (
@@ -576,54 +951,9 @@ function Dashboard({ session }: { session: Session }) {
               )}
             </section>
 
-            <section className="card">
-              <h2>Anggaran <small>{monthLabel(month)}</small></h2>
-              <div>
-            {budgets.map((b) => {
-              const used = monthTxs.filter((t) => t.type === "out" && t.category === b.category).reduce((a, t) => a + t.amount, 0);
-              const pct = b.amount ? Math.min(100, (used / b.amount) * 100) : 0;
-              const isLimit = b.kind === "limit";
-              const cls = isLimit ? (used > b.amount ? "over" : "") : used >= b.amount ? "done" : "";
-              const text = isLimit
-                ? used > b.amount ? `Lewat ${rp(used - b.amount)} dari batas.` : `Sisa ${rp(b.amount - used)}.`
-                : used >= b.amount ? "Target bulan ini tercapai." : `Kurang ${rp(b.amount - used)} lagi.`;
-              return (
-                <div className="budget" key={b.category}>
-                  <div className="head">
-                    <strong>{b.category}</strong>
-                    <span>{rp(used)} / {rp(b.amount)} <button className="linkbtn" onClick={() => editBudget(b)}>ubah</button></span>
-                  </div>
-                  <div className="bar" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${isLimit ? "Batas" : "Target"} ${b.category}`}>
-                    <i className={cls} style={{ width: `${pct}%` }} />
-                  </div>
-                  <div className="msg">{text}</div>
-                </div>
-              );
-            })}
-          </div>
-        
-            </section>
+          </div>}
 
-<section className="card" id="berulang">
-          <h2>Transaksi berulang</h2>
-          {recurring.length === 0 ? (
-            <p className="empty">Belum ada. Pilih &quot;Ulangi&quot; saat mencatat transaksi.</p>
-          ) : (
-            recurring.map((r) => (
-              <div className="tx" key={r.id}>
-                <div>
-                  <div className="cat">{r.category}{r.note ? ` · ${r.note}` : ""}</div>
-                  <div className="meta">{r.frequency === "weekly" ? "Tiap minggu" : "Tiap bulan"} · berikutnya {dateLabel(r.next_date)}</div>
-                </div>
-                <div className={`amt ${r.type}`}>{r.type === "in" ? "+" : "-"}{rp(r.amount)}</div>
-                <button className="del" onClick={() => stopRecurring(r.id)}>Hentikan</button>
-              </div>
-            ))
-          )}
-        </section>
-          </div>
-
-          <div className="col">
+          {nav === "statistik" && <div className="col">
             <section className="card">
               <h2>Arus kas <small>Pemasukan dan pengeluaran per bulan</small></h2>
               <div className="legend row">
@@ -658,8 +988,50 @@ function Dashboard({ session }: { session: Session }) {
                 </ResponsiveContainer>
               </div>
             </section>
+
           </div>
+          }
+
+          {nav === "pengaturan" && <div className="col">
+            <section className="card" id="pengaturan">
+              <h2>Pengaturan akun</h2>
+              <p className="note">Akun: {session.user.email ?? uname}</p>
+              <form onSubmit={changePassword}>
+                <div className="field">
+                  <label htmlFor="new-password">Kata sandi baru</label>
+                  <input id="new-password" type="password" autoComplete="new-password" minLength={6} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                </div>
+                <div className="field">
+                  <label htmlFor="confirm-password">Konfirmasi kata sandi baru</label>
+                  <input id="confirm-password" type="password" autoComplete="new-password" minLength={6} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                </div>
+                {passwordMessage && <p className={passwordMessage === "Kata sandi berhasil diubah." ? "note" : "err"} role={passwordMessage === "Kata sandi berhasil diubah." ? "status" : "alert"}>{passwordMessage}</p>}
+                <button className="btn" disabled={changingPassword}>{changingPassword ? "Menyimpan..." : "Ubah kata sandi"}</button>
+              </form>
+            </section>
+          </div>}
         </div>
+        </>}
+
+        {wishFormOpen && <div className="budget-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) { setWishFormOpen(false); setWishEditing(null); } }}>
+          <section className="budget-modal" role="dialog" aria-modal="true" aria-labelledby="wish-modal-title">
+            <div className="section-heading">
+              <h2 id="wish-modal-title">{wishEditing ? "Ubah Wish List" : "Tambah Wish List"}</h2>
+              <button type="button" className="modal-close" onClick={() => { setWishFormOpen(false); setWishEditing(null); }} aria-label="Tutup">×</button>
+            </div>
+            <form onSubmit={saveWish}>
+              <div className="field">
+                <label htmlFor="wish-name">Nama barang</label>
+                <input id="wish-name" required value={wishName} onChange={(e) => setWishName(e.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="wish-amount">Harga target (Rp)</label>
+                <input id="wish-amount" inputMode="numeric" placeholder="mis. 250.000" required value={wishAmount} onChange={(e) => setWishAmount(rupiahInput(e.target.value))} />
+              </div>
+              <button className="btn" disabled={savingWish}>{savingWish ? "Menyimpan..." : wishEditing ? "Simpan perubahan" : "Simpan ke Wish List"}</button>
+            </form>
+          </section>
+        </div>}
       </main>
     </div>
   );
