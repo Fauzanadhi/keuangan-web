@@ -44,7 +44,7 @@ const budgetRange = (month: number, year: number) => ({
 });
 
 type Wallet = { id: string; name: string; kind: "cash" | "emoney" | "bank" | "investment"; archived_at: string | null };
-const KINDS = { cash: "Tunai", emoney: "E-money", bank: "Rekening" } as const;
+const KINDS = { cash: "Tunai", emoney: "E - Wallet", bank: "Rekening" } as const;
 
 const NAV_GROUPS = [
   { label: "", items: [
@@ -69,6 +69,8 @@ function Icon({ n }: { n: string }) {
     chart: "M4 19.5h16M5.5 16V11M10 16V6M14.5 16V9M19 16V4M4.5 8.5l5-4 4.5 3 5-4",
     "trend-up": "M3 17l6-6 4 4 8-9M15 6h6v6",
     "trend-down": "M3 7l6 6 4-4 8 9M15 18h6v-6",
+    eye: "M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6zM12 9a3 3 0 100 6 3 3 0 000-6z",
+    "eye-off": "M3 3l18 18M10.6 6.2A10.7 10.7 0 0112 6c6.4 0 10 6 10 6a16 16 0 01-3.1 3.7M6.2 6.3C3.5 8.1 2 12 2 12s3.6 6 10 6a10.7 10.7 0 004.2-.8M9.9 9.9a3 3 0 004.2 4.2",
     search: "M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-4.3-4.3",
     budget: "M12 3.5l7 3v5.3c0 4.2-2.8 7.2-7 8.7-4.2-1.5-7-4.5-7-8.7V6.5l7-3zM12 8v7M14.2 9.5c-.5-.7-1.2-1-2.2-1-1.2 0-2 .6-2 1.5s.8 1.3 2 1.5 2 .6 2 1.5-.8 1.5-2 1.5c-.9 0-1.7-.3-2.2-1",
     category: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
@@ -322,6 +324,8 @@ function Login() {
 }
 
 function Dashboard({ session }: { session: Session }) {
+  const [showBalances, setShowBalances] = useState(true);
+  const [confirmation, setConfirmation] = useState<{ message: string; onConfirm: () => void | Promise<void> } | null>(null);
   const [txs, setTxs] = useState<Tx[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [wishes, setWishes] = useState<Wish[]>([]);
@@ -743,43 +747,46 @@ function Dashboard({ session }: { session: Session }) {
     }
   }
 
-  async function removeIncomeCategory(value: string) {
+  function removeIncomeCategory(value: string) {
     if (incomeCategories.length <= 1) {
       setError("Minimal harus ada satu kategori pemasukan.");
       return;
     }
-    if (!window.confirm(`Hapus kategori "${value}" dari pilihan? Riwayat transaksi lama tetap disimpan.`)) return;
-    const { error } = await supabase.from("income_categories").delete().eq("category", value);
-    if (error) setError(error.message);
-    else {
-      const next = incomeCategories.filter((item) => item !== value);
-      setIncomeCategories(next);
-      if (type === "in" && category === value) setCategory(next[0]);
-    }
+    requestConfirmation(`Hapus kategori "${value}" dari pilihan? Riwayat transaksi lama tetap disimpan.`, async () => {
+      const { error } = await supabase.from("income_categories").delete().eq("category", value);
+      if (error) setError(error.message);
+      else {
+        const next = incomeCategories.filter((item) => item !== value);
+        setIncomeCategories(next);
+        if (type === "in" && category === value) setCategory(next[0]);
+      }
+    });
   }
 
-  async function removeExpenseCategory(value: string) {
+  function removeExpenseCategory(value: string) {
     if (expenseCategories.length <= 1) {
       setError("Minimal harus ada satu kategori pengeluaran.");
       return;
     }
-    if (!window.confirm(`Hapus kategori "${value}" dari pilihan? Riwayat transaksi dan anggaran lama tetap disimpan.`)) return;
-    const { error } = await supabase.from("expense_categories").delete().eq("category", value);
-    if (error) setError(error.message);
-    else {
-      const next = expenseCategories.filter((item) => item !== value);
-      setExpenseCategories(next);
-      if (category === value) setCategory(next[0]);
-      if (budgetCategory === value) setBudgetCategory(next[0]);
-      if (budgetFilter === value) setBudgetFilter("all");
-    }
+    requestConfirmation(`Hapus kategori "${value}" dari pilihan? Riwayat transaksi dan anggaran lama tetap disimpan.`, async () => {
+      const { error } = await supabase.from("expense_categories").delete().eq("category", value);
+      if (error) setError(error.message);
+      else {
+        const next = expenseCategories.filter((item) => item !== value);
+        setExpenseCategories(next);
+        if (category === value) setCategory(next[0]);
+        if (budgetCategory === value) setBudgetCategory(next[0]);
+        if (budgetFilter === value) setBudgetFilter("all");
+      }
+    });
   }
 
-  async function archiveWallet(wallet: Wallet) {
-    if (!window.confirm(`Hapus dompet "${wallet.name}" dari daftar aktif? Riwayat dan saldonya tetap tersimpan, dan transaksi lama akan menandai dompet ini sebagai dihapus.`)) return;
-    const { error } = await supabase.from("wallets").update({ archived_at: new Date().toISOString() }).eq("id", wallet.id);
-    if (error) setError(error.message);
-    else await load();
+  function archiveWallet(wallet: Wallet) {
+    requestConfirmation(`Hapus dompet "${wallet.name}" dari daftar aktif? Riwayat dan saldonya tetap tersimpan, dan transaksi lama akan menandai dompet ini sebagai dihapus.`, async () => {
+      const { error } = await supabase.from("wallets").update({ archived_at: new Date().toISOString() }).eq("id", wallet.id);
+      if (error) setError(error.message);
+      else await load();
+    });
   }
 
   async function restoreWallet(wallet: Wallet) {
@@ -788,32 +795,32 @@ function Dashboard({ session }: { session: Session }) {
     else await load();
   }
 
-  async function permanentlyDeleteWallet(wallet: Wallet) {
+  function permanentlyDeleteWallet(wallet: Wallet) {
     if (!wallet.archived_at) {
       setError("Hanya dompet yang sudah diarsipkan yang dapat dihapus permanen.");
       return;
     }
-    if (!window.confirm(`Hapus permanen dompet "${wallet.name}" beserta seluruh transaksi yang terkait? Tindakan ini tidak dapat dibatalkan.`)) return;
+    requestConfirmation(`Hapus permanen dompet "${wallet.name}" beserta seluruh transaksi yang terkait? Tindakan ini tidak dapat dibatalkan.`, async () => {
+      const { error: transactionError } = await supabase
+        .from("transactions")
+        .delete()
+        .or(`wallet_id.eq.${wallet.id},wallet_to_id.eq.${wallet.id}`);
+      if (transactionError) {
+        setError(`Transaksi terkait dompet tidak dapat dihapus: ${transactionError.message}`);
+        return;
+      }
 
-    const { error: transactionError } = await supabase
-      .from("transactions")
-      .delete()
-      .or(`wallet_id.eq.${wallet.id},wallet_to_id.eq.${wallet.id}`);
-    if (transactionError) {
-      setError(`Transaksi terkait dompet tidak dapat dihapus: ${transactionError.message}`);
-      return;
-    }
-
-    const { error: walletError } = await supabase
-      .from("wallets")
-      .delete()
-      .eq("id", wallet.id)
-      .not("archived_at", "is", null);
-    if (walletError) {
-      setError(`Transaksi terkait sudah dihapus, tetapi dompet gagal dihapus: ${walletError.message}`);
-      return;
-    }
-    await load();
+      const { error: walletError } = await supabase
+        .from("wallets")
+        .delete()
+        .eq("id", wallet.id)
+        .not("archived_at", "is", null);
+      if (walletError) {
+        setError(`Transaksi terkait sudah dihapus, tetapi dompet gagal dihapus: ${walletError.message}`);
+        return;
+      }
+      await load();
+    });
   }
 
   async function changePassword(e: React.FormEvent) {
@@ -856,11 +863,12 @@ function Dashboard({ session }: { session: Session }) {
     }
   }
 
-  async function remove(t: Tx) {
-    if (!window.confirm(`Hapus ${t.category} ${rp(t.amount)}?`)) return;
-    const { error } = await supabase.from("transactions").delete().eq("id", t.id);
-    if (error) setError(error.message);
-    else setTxs((p) => p.filter((x) => x.id !== t.id));
+  function remove(t: Tx) {
+    requestConfirmation(`Hapus ${t.category} ${rp(t.amount)}?`, async () => {
+      const { error } = await supabase.from("transactions").delete().eq("id", t.id);
+      if (error) setError(error.message);
+      else setTxs((p) => p.filter((x) => x.id !== t.id));
+    });
   }
 
   async function saveBudget(e: React.FormEvent) {
@@ -911,16 +919,17 @@ function Dashboard({ session }: { session: Session }) {
     setBudgetFormOpen(true);
   }
 
-  async function removeBudget(budget: Budget) {
-    if (!window.confirm(`Hapus anggaran ${budget.category} ${MONTH_NAMES[budget.month - 1]} ${budget.year}?`)) return;
-    const { error } = await supabase
-      .from("category_budgets")
-      .delete()
-      .eq("category", budget.category)
-      .eq("month", budget.month)
-      .eq("year", budget.year);
-    if (error) setError(error.message);
-    else await load();
+  function removeBudget(budget: Budget) {
+    requestConfirmation(`Hapus anggaran ${budget.category} ${MONTH_NAMES[budget.month - 1]} ${budget.year}?`, async () => {
+      const { error } = await supabase
+        .from("category_budgets")
+        .delete()
+        .eq("category", budget.category)
+        .eq("month", budget.month)
+        .eq("year", budget.year);
+      if (error) setError(error.message);
+      else await load();
+    });
   }
 
   async function saveWish(e: React.FormEvent) {
@@ -954,11 +963,12 @@ function Dashboard({ session }: { session: Session }) {
     setWishFormOpen(true);
   }
 
-  async function removeWish(wish: Wish) {
-    if (!window.confirm(`Hapus "${wish.name}" dari Wish List?`)) return;
-    const { error } = await supabase.from("wish_list").delete().eq("id", wish.id);
-    if (error) setError(error.message);
-    else setWishes((items) => items.filter((item) => item.id !== wish.id));
+  function removeWish(wish: Wish) {
+    requestConfirmation(`Hapus "${wish.name}" dari Wish List?`, async () => {
+      const { error } = await supabase.from("wish_list").delete().eq("id", wish.id);
+      if (error) setError(error.message);
+      else setWishes((items) => items.filter((item) => item.id !== wish.id));
+    });
   }
 
   async function completeWish(wish: Wish) {
@@ -978,6 +988,30 @@ function Dashboard({ session }: { session: Session }) {
   }
 
   const uname = username || (session.user.email ?? "").split("@")[0];
+  const displayRp = (amount: number) => showBalances ? rp(amount) : "••••••";
+  const balanceVisibilityButton = (
+    <button
+      type="button"
+      className="balance-visibility-toggle"
+      onClick={() => setShowBalances((visible) => !visible)}
+      aria-label={showBalances ? "Sembunyikan saldo" : "Tampilkan saldo"}
+      aria-pressed={!showBalances}
+      title={showBalances ? "Sembunyikan saldo" : "Tampilkan saldo"}
+    >
+      <Icon n={showBalances ? "eye" : "eye-off"} />
+    </button>
+  );
+  function requestConfirmation(message: string, onConfirm: () => void) {
+    setConfirmation({ message, onConfirm });
+  }
+  useEffect(() => {
+    if (!confirmation) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setConfirmation(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [confirmation]);
   const axis = { tickLine: false, axisLine: false, fontSize: 12 } as const;
   const budgetOverview = budgets.filter((b) => b.month === Number(month.slice(5)) && b.year === Number(month.slice(0, 4))).map((b) => {
     const range = budgetRange(b.month, b.year);
@@ -1019,7 +1053,7 @@ function Dashboard({ session }: { session: Session }) {
       <span className="budget-chart-category" key={item.name}>
         <i style={{ background: categoryColor(index) }} />
         <span>{item.name}</span>
-        <b>{rp(item.spent)} / {rp(item.budget)}</b>
+        <b>{displayRp(item.spent)} / {displayRp(item.budget)}</b>
       </span>
     );
   });
@@ -1054,21 +1088,21 @@ function Dashboard({ session }: { session: Session }) {
       <section className="card balance-group">
         <h2>Saldo saat ini</h2>
         <div className="pcard">
-          <small>Total saldo dompet</small>
-          <div className="big">{rp(saldo)}</div>
+          <div className="balance-visibility-heading"><small>Total saldo dompet</small>{balanceVisibilityButton}</div>
+          <div className="big">{displayRp(saldo)}</div>
           <div className="row"><span>{uname}</span><span>{monthLabel(month, true)}</span></div>
         </div>
         <h3>Dompet</h3>
         {regularWalletEntries.length ? regularWalletEntries.map((w) => (
           <div className="wallet-entry" key={w.id}>
             <div><strong>{w.name}</strong><small>{w.kind}{w.archived ? " · Dompet dihapus" : ""}</small></div>
-            <b>{rp(w.bal)}</b>
+            <b>{displayRp(w.bal)}</b>
           </div>
         )) : <p className="empty">Belum ada dompet aktif.</p>}
-        {unassignedWalletBalance !== 0 && <div className="wallet-entry"><div><strong>Tanpa dompet</strong><small>Transaksi yang belum dipasangkan ke dompet</small></div><b>{rp(unassignedWalletBalance)}</b></div>}
+        {unassignedWalletBalance !== 0 && <div className="wallet-entry"><div><strong>Tanpa dompet</strong><small>Transaksi yang belum dipasangkan ke dompet</small></div><b>{displayRp(unassignedWalletBalance)}</b></div>}
         {!!archivedRegularBalances.length && <>
           <h3 className="archived-wallet-title">Dompet dihapus</h3>
-          {archivedRegularBalances.map((w) => <div className="wallet-entry archived-wallet-entry" key={w.id}><div><strong>{w.name}</strong><small>Riwayat dipertahankan</small></div><b>{rp(w.bal)}</b></div>)}
+          {archivedRegularBalances.map((w) => <div className="wallet-entry archived-wallet-entry" key={w.id}><div><strong>{w.name}</strong><small>Riwayat dipertahankan</small></div><b>{displayRp(w.bal)}</b></div>)}
         </>}
       </section>
     </>
@@ -1110,7 +1144,7 @@ function Dashboard({ session }: { session: Session }) {
               <div className="bar" role="progressbar" aria-valuenow={Math.round(selectedCategoryPct)} aria-valuemin={0} aria-valuemax={100} aria-label={`Anggaran ${category}`}>
                 <i className={selectedCategorySpent > selectedCategoryBudget.amount ? "over" : ""} style={{ width: `${selectedCategoryPct}%` }} />
               </div>
-              <small>Sisa anggaran {MONTH_NAMES[selectedCategoryBudget.month - 1]}: {rp(Math.max(0, selectedCategoryBudget.amount - selectedCategorySpent))} dari {rp(selectedCategoryBudget.amount)}</small>
+              <small>Sisa anggaran {MONTH_NAMES[selectedCategoryBudget.month - 1]}: {displayRp(Math.max(0, selectedCategoryBudget.amount - selectedCategorySpent))} dari {displayRp(selectedCategoryBudget.amount)}</small>
             </div>
           )}
           {type === "out" && !selectedCategoryBudget && <small className="category-budget-empty">Belum ada anggaran untuk kategori ini pada bulan transaksi.</small>}
@@ -1125,7 +1159,7 @@ function Dashboard({ session }: { session: Session }) {
             options={[
               { label: "Tidak terkait Wish List", value: "" },
               ...wishes.filter((wish) => !wish.completed_at || wish.id === transactionWishId).map((wish) => ({
-                label: `${wish.name} · Target ${rp(wish.target_amount)}${wish.completed_at ? " (Selesai)" : ""}`,
+                label: `${wish.name} · Target ${displayRp(wish.target_amount)}${wish.completed_at ? " (Selesai)" : ""}`,
                 value: wish.id,
               })),
             ]}
@@ -1220,7 +1254,7 @@ function Dashboard({ session }: { session: Session }) {
         {nav === "anggaran" ? (
           <header className="budget-page-header">
             <button className="budget-back" type="button" onClick={goBack} aria-label="Kembali ke halaman sebelumnya">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12" /></svg>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
             </button>
             <h1>Anggaran</h1>
             <button className="budget-add" type="button" onClick={openNewBudget} aria-label="Tambah anggaran">+</button>
@@ -1228,7 +1262,7 @@ function Dashboard({ session }: { session: Session }) {
         ) : nav === "wishlist" ? (
           <header className="transaction-page-header wishlist-page-header">
             <button className="budget-back" type="button" onClick={goBack} aria-label="Kembali ke halaman sebelumnya">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12" /></svg>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
             </button>
             <h1>Wish List</h1>
             <button className="budget-add" type="button" onClick={() => { setWishEditing(null); setWishName(""); setWishAmount(""); setWishFormOpen(true); }} aria-label="Tambah Wish List">+</button>
@@ -1236,7 +1270,7 @@ function Dashboard({ session }: { session: Session }) {
         ) : nav === "catat-transaksi" || nav === "dompet" ? (
           <header className="transaction-page-header">
             <button className="budget-back" type="button" onClick={goBack} aria-label="Kembali ke halaman sebelumnya">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12" /></svg>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
             </button>
             <h1>{nav === "catat-transaksi" ? "Catat Transaksi" : "Dompet"}</h1>
           </header>
@@ -1321,7 +1355,7 @@ function Dashboard({ session }: { session: Session }) {
                   </Pie>
                   {budgetChartSpentTotal === 0 && <Pie data={[{ name: "Tidak ada pengeluaran", value: 1 }]} dataKey="value" innerRadius="80%" outerRadius="94%" stroke="none"><Cell fill="#e9eaf2" /></Pie>}
                   {budgetChartBudgetTotal === 0 && <Pie data={[{ name: "Belum ada anggaran", value: 1 }]} dataKey="value" innerRadius="62%" outerRadius="76%" stroke="none"><Cell fill="#d9dbe8" /></Pie>}
-                  <Tooltip formatter={(value: number) => rp(value)} />
+                  <Tooltip formatter={(value: number) => displayRp(value)} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -1329,8 +1363,8 @@ function Dashboard({ session }: { session: Session }) {
             <div className="budget-chart-legend budget-chart-legend-right">{renderBudgetCategories(budgetChart.filter((_, index) => index % 2 === 1))}</div>
             {budgetChart.length === 0 && <p className="empty budget-chart-empty">Belum ada anggaran atau pengeluaran pada bulan ini.</p>}
             <div className="budget-chart-summary">
-              <div><span>Realisasi</span><strong>{rp(budgetChartSpentTotal)}</strong></div>
-              <div><span>Anggaran</span><strong>{rp(budgetChartBudgetTotal)}</strong></div>
+              <div><span>Realisasi</span><strong>{displayRp(budgetChartSpentTotal)}</strong></div>
+              <div><span>Anggaran</span><strong>{displayRp(budgetChartBudgetTotal)}</strong></div>
             </div>
           </section>
 
@@ -1351,13 +1385,13 @@ function Dashboard({ session }: { session: Session }) {
                 <article className="budget-entry" key={`${budget.category}-${budget.month}-${budget.year}`}>
                   <div className="budget-entry-heading">
                     <div><strong>{budget.category}</strong><small>{MONTH_NAMES[budget.month - 1]} {budget.year}</small></div>
-                    <strong>{rp(budget.used)} <small>/ {rp(budget.amount)}</small></strong>
+                    <strong>{displayRp(budget.used)} <small>/ {displayRp(budget.amount)}</small></strong>
                   </div>
                   <div className="bar" role="progressbar" aria-valuenow={Math.round(budget.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${budget.category} ${MONTH_NAMES[budget.month - 1]} ${budget.year}`}>
                     <i className={over ? "over" : budget.kind === "target" && budget.used >= budget.amount ? "done" : ""} style={{ width: `${budget.pct}%` }} />
                   </div>
                   <div className="budget-entry-footer">
-                    <span className={over ? "budget-alert" : ""}>{over ? `Melewati batas ${rp(budget.used - budget.amount)}` : near ? "Hampir mencapai batas" : budget.kind === "target" && budget.used >= budget.amount ? "Target tercapai" : `Sisa ${rp(Math.max(0, budget.amount - budget.used))}`}</span>
+                    <span className={over ? "budget-alert" : ""}>{over ? `Melewati batas ${displayRp(budget.used - budget.amount)}` : near ? "Hampir mencapai batas" : budget.kind === "target" && budget.used >= budget.amount ? "Target tercapai" : `Sisa ${displayRp(Math.max(0, budget.amount - budget.used))}`}</span>
                     <span className="budget-entry-actions">
                       <button type="button" onClick={() => { startEditBudget(budget); setBudgetFormOpen(true); }}>Ubah</button>
                       <button type="button" onClick={() => removeBudget(budget)}>Hapus</button>
@@ -1426,23 +1460,23 @@ function Dashboard({ session }: { session: Session }) {
 
         {nav === "beranda" && <div className="home-dashboard">
         <section className="home-balance">
-          <div className="balance-heading"><span>Saldo saat ini</span><small>{monthLabel(month)}</small></div>
-          <strong>{rp(saldo)}</strong>
+          <div className="balance-heading"><span>Saldo saat ini</span><small>{monthLabel(month)}</small>{balanceVisibilityButton}</div>
+          <strong>{displayRp(saldo)}</strong>
           <span className="balance-caption">Ringkasan keuanganmu, diperbarui dari transaksi tercatat</span>
         </section>
 
         <div className="home-totals">
           <section className="total-tile income-tile">
             <span className="total-icon"><Icon n="trend-up" /></span><span>Pemasukan bulan ini</span>
-            <strong>{rp(inM)}</strong>
+            <strong>{displayRp(inM)}</strong>
           </section>
           <section className="total-tile expense-tile">
             <span className="total-icon"><Icon n="trend-down" /></span><span>Pengeluaran bulan ini</span>
-            <strong>{rp(outM)}</strong>
+            <strong>{displayRp(outM)}</strong>
           </section>
           <section className="total-tile net-tile">
             <span className="total-icon">≈</span><span>Arus kas bersih</span>
-            <strong>{rp(inM - outM)}</strong>
+            <strong>{displayRp(inM - outM)}</strong>
           </section>
         </div>
 
@@ -1480,7 +1514,7 @@ function Dashboard({ session }: { session: Session }) {
                     <CartesianGrid vertical={false} stroke="rgba(112, 139, 195, .2)" />
                     <XAxis dataKey="bulan" {...axis} />
                     <YAxis hide />
-                    <Tooltip formatter={(v: number) => rp(v)} />
+                    <Tooltip formatter={(v: number) => displayRp(v)} />
                     <Area type="monotone" dataKey="Pemasukan" stroke="#35cfc8" strokeWidth={3} fill="url(#income-glow)" dot={{ r: 3, strokeWidth: 0 }} activeDot={{ r: 5, strokeWidth: 0 }} />
                     <Area type="monotone" dataKey="Pengeluaran" stroke="#7382f4" strokeWidth={3} fill="url(#expense-glow)" dot={{ r: 3, strokeWidth: 0 }} activeDot={{ r: 5, strokeWidth: 0 }} />
                   </AreaChart>
@@ -1505,14 +1539,14 @@ function Dashboard({ session }: { session: Session }) {
                 <div className="budget" key={b.category}>
                   <div className="head">
                     <strong>{b.category}</strong>
-                    <span className={over ? "budget-alert" : ""}>{over ? "Melewati batas" : near ? "Hampir mencapai batas" : `${rp(b.used)} / ${rp(b.amount)}`}</span>
+                    <span className={over ? "budget-alert" : ""}>{over ? "Melewati batas" : near ? "Hampir mencapai batas" : `${displayRp(b.used)} / ${displayRp(b.amount)}`}</span>
                   </div>
                   <div className="bar" role="progressbar" aria-valuenow={Math.round(b.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`Anggaran ${b.category}`}>
                     <i className={over ? "over" : b.kind === "target" && b.used >= b.amount ? "done" : ""} style={{ width: `${b.pct}%` }} />
                   </div>
                   <div className="msg">{b.kind === "target"
-                    ? b.used >= b.amount ? "Target tercapai." : `Kurang ${rp(b.amount - b.used)} lagi.`
-                    : over ? `Lewat ${rp(b.used - b.amount)} dari batas.` : `Sisa ${rp(b.amount - b.used)}.`}</div>
+                    ? b.used >= b.amount ? "Target tercapai." : `Kurang ${displayRp(b.amount - b.used)} lagi.`
+                    : over ? `Lewat ${displayRp(b.used - b.amount)} dari batas.` : `Sisa ${displayRp(b.amount - b.used)}.`}</div>
                 </div>
               );
             })}
@@ -1540,7 +1574,7 @@ function Dashboard({ session }: { session: Session }) {
                     ? ` · ${transferWalletRoute(t)}`
                     : t.wallet_id ? ` · ${wallets.find((w) => w.id === t.wallet_id)?.name ?? ""}${wallets.find((w) => w.id === t.wallet_id)?.archived_at ? " (Dompet sudah dihapus)" : ""}` : ""}</div>
                 </div>
-                <div className={`amt ${t.type === "transfer" ? "" : t.type}`}>{t.type === "transfer" ? rp(t.amount) : `${t.type === "in" ? "+" : "-"}${rp(t.amount)}`}</div>
+                <div className={`amt ${t.type === "transfer" ? "" : t.type}`}>{t.type === "transfer" ? displayRp(t.amount) : `${t.type === "in" ? "+" : "-"}${displayRp(t.amount)}`}</div>
                 <span className="transaction-actions">
                   <button className="del" onClick={() => startEdit(t)}>Ubah</button>
                   <button className="del" onClick={() => remove(t)}>Hapus</button>
@@ -1560,11 +1594,11 @@ function Dashboard({ session }: { session: Session }) {
             <div className="transaction-summary">
               <section className="card transaction-summary-income">
                 <span>Pemasukan</span>
-                <strong>{rp(transactionIncomeTotal)}</strong>
+                <strong>{displayRp(transactionIncomeTotal)}</strong>
               </section>
               <section className="card transaction-summary-expense">
                 <span>Pengeluaran</span>
-                <strong>{rp(transactionExpenseTotal)}</strong>
+                <strong>{displayRp(transactionExpenseTotal)}</strong>
               </section>
             </div>
             <section className="card recent-card transaction-history-card">
@@ -1615,7 +1649,7 @@ function Dashboard({ session }: { session: Session }) {
                       ? ` · ${transferWalletRoute(t)}`
                       : t.wallet_id ? ` · ${wallets.find((w) => w.id === t.wallet_id)?.name ?? ""}${wallets.find((w) => w.id === t.wallet_id)?.archived_at ? " (Dompet sudah dihapus)" : ""}` : ""}</div>
                   </div>
-                  <div className={`amt ${t.type === "transfer" ? "" : t.type}`}>{t.type === "transfer" ? rp(t.amount) : `${t.type === "in" ? "+" : "-"}${rp(t.amount)}`}</div>
+                  <div className={`amt ${t.type === "transfer" ? "" : t.type}`}>{t.type === "transfer" ? displayRp(t.amount) : `${t.type === "in" ? "+" : "-"}${displayRp(t.amount)}`}</div>
                   <span className="transaction-actions">
                     <button className="del" onClick={() => startEdit(t)}>Ubah</button>
                     <button className="del" onClick={() => remove(t)}>Hapus</button>
@@ -1633,8 +1667,8 @@ function Dashboard({ session }: { session: Session }) {
         <div><h2>Ringkasan saldo</h2><small>Saldo total mencakup transaksi yang belum dipasangkan ke dompet.</small></div>
       </div>
       <div className="pcard">
-        <small>Total saldo</small>
-        <div className="big">{rp(saldo)}</div>
+        <div className="balance-visibility-heading"><small>Total saldo</small>{balanceVisibilityButton}</div>
+        <div className="big">{displayRp(saldo)}</div>
         <span>Perubahan bersih dari seluruh transaksi</span>
       </div>
       <h3>Dompet</h3>
@@ -1643,7 +1677,7 @@ function Dashboard({ session }: { session: Session }) {
         return <div className="wallet-record" key={w.id}>
           <article className="wallet-entry">
             <div><strong>{w.name}</strong><small>{w.kind}</small></div>
-            <b className={`wallet-entry-value${w.bal < 0 ? " negative" : ""}`}>{rp(w.bal)}</b>
+            <b className={`wallet-entry-value${w.bal < 0 ? " negative" : ""}`}>{displayRp(w.bal)}</b>
             <div className="wallet-entry-actions">
               <button type="button" className="wallet-edit" onClick={() => { const wallet = wallets.find((item) => item.id === w.id); if (wallet) startEditWallet(wallet); }}>Ubah</button>
               <button type="button" onClick={() => { const wallet = wallets.find((item) => item.id === w.id); if (wallet) archiveWallet(wallet); }}>Hapus</button>
@@ -1658,7 +1692,7 @@ function Dashboard({ session }: { session: Session }) {
                   <div className="meta">{dateLabel(transaction.date)}{transaction.type === "transfer" ? ` · ${transferWalletRoute(transaction)}` : ""}</div>
                 </div>
                 <div className={`amt ${transaction.type === "transfer" ? "" : transaction.type}`}>
-                  {transaction.type === "transfer" ? rp(transaction.amount) : `${transaction.type === "in" ? "+" : "-"}${rp(transaction.amount)}`}
+                  {transaction.type === "transfer" ? displayRp(transaction.amount) : `${transaction.type === "in" ? "+" : "-"}${displayRp(transaction.amount)}`}
                 </div>
                 <span className="transaction-actions">
                   <button className="del" type="button" onClick={() => startEdit(transaction)}>Ubah</button>
@@ -1669,13 +1703,13 @@ function Dashboard({ session }: { session: Session }) {
           </details>
         </div>;
       }) : <p className="empty">Belum ada dompet aktif.</p>}
-      {unassignedWalletBalance !== 0 && <div className="wallet-entry unassigned-wallet-entry"><div><strong>Tanpa dompet</strong><small>Transaksi yang belum dipasangkan ke dompet</small></div><b className={`wallet-entry-value${unassignedWalletBalance < 0 ? " negative" : ""}`}>{rp(unassignedWalletBalance)}</b></div>}
+      {unassignedWalletBalance !== 0 && <div className="wallet-entry unassigned-wallet-entry"><div><strong>Tanpa dompet</strong><small>Transaksi yang belum dipasangkan ke dompet</small></div><b className={`wallet-entry-value${unassignedWalletBalance < 0 ? " negative" : ""}`}>{displayRp(unassignedWalletBalance)}</b></div>}
       {!!archivedRegularBalances.length && <>
         <h3 className="archived-wallet-title">Dompet dihapus</h3>
         {archivedRegularBalances.map((w) => (
           <article className="wallet-entry archived-wallet-entry" key={w.id}>
             <div><strong>{w.name}</strong><small>Riwayat transaksi tetap tersimpan</small></div>
-            <b className={`wallet-entry-value${w.bal < 0 ? " negative" : ""}`}>{rp(w.bal)}</b>
+            <b className={`wallet-entry-value${w.bal < 0 ? " negative" : ""}`}>{displayRp(w.bal)}</b>
             <div className="archived-wallet-actions">
               <button type="button" onClick={() => { const wallet = wallets.find((item) => item.id === w.id); if (wallet) restoreWallet(wallet); }}>Pulihkan</button>
               <button type="button" className="wallet-permanent-delete" onClick={() => { const wallet = wallets.find((item) => item.id === w.id); if (wallet) permanentlyDeleteWallet(wallet); }}>Hapus permanen</button>
@@ -1726,7 +1760,7 @@ function Dashboard({ session }: { session: Session }) {
             <div className="wishlist-item-details">
               <strong>{wish.name}</strong>
               <small>Target harga</small>
-              <b>{rp(wish.target_amount)}</b>
+              <b>{displayRp(wish.target_amount)}</b>
             </div>
             <div className="wishlist-entry-actions">
               <button type="button" onClick={() => editWish(wish)}>Ubah</button>
@@ -1748,8 +1782,8 @@ function Dashboard({ session }: { session: Session }) {
             <div className="wishlist-item-details">
               <strong>{wish.name}</strong>
               <small>Selesai {wish.completed_at ? dateLabel(wish.completed_at.slice(0, 10)) : ""}</small>
-              <span>Target {rp(wish.target_amount)}</span>
-              <b>Harga pembelian {rp(wish.completed_amount ?? wish.target_amount)}</b>
+              <span>Target {displayRp(wish.target_amount)}</span>
+              <b>Harga pembelian {displayRp(wish.completed_amount ?? wish.target_amount)}</b>
             </div>
             <div className="wishlist-entry-actions">
               <button type="button" onClick={() => reopenWish(wish)}>Aktifkan lagi</button>
@@ -1785,9 +1819,9 @@ function Dashboard({ session }: { session: Session }) {
             </section>
 
             <div className="report-summary">
-              <section className="card report-income"><span>Total pemasukan</span><strong>{rp(reportIncome)}</strong></section>
-              <section className="card report-expense"><span>Total pengeluaran</span><strong>{rp(reportExpense)}</strong></section>
-              <section className="card report-net"><span>Selisih</span><strong>{rp(reportIncome - reportExpense)}</strong></section>
+              <section className="card report-income"><span>Total pemasukan</span><strong>{displayRp(reportIncome)}</strong></section>
+              <section className="card report-expense"><span>Total pengeluaran</span><strong>{displayRp(reportExpense)}</strong></section>
+              <section className="card report-net"><span>Selisih</span><strong>{displayRp(reportIncome - reportExpense)}</strong></section>
               <section className="card report-saving"><span>Rasio tersisa</span><strong>{reportIncome > 0 ? `${Math.round(((reportIncome - reportExpense) / reportIncome) * 100)}%` : "—"}</strong></section>
             </div>
 
@@ -1810,7 +1844,7 @@ function Dashboard({ session }: { session: Session }) {
                       <CartesianGrid vertical={false} stroke="#dce5f5" />
                       <XAxis dataKey="bulan" {...axis} interval={reportScale === "monthly" ? 4 : 0} />
                       <YAxis {...axis} width={54} tickFormatter={(value: number) => `${Math.round(value / 1000)}rb`} />
-                      <Tooltip formatter={(value: number) => rp(value)} />
+                      <Tooltip formatter={(value: number) => displayRp(value)} />
                       <Line type="monotone" dataKey="Pemasukan" stroke="#35cfc8" strokeWidth={3} dot={false} />
                       <Line type="monotone" dataKey="Pengeluaran" stroke="#7382f4" strokeWidth={3} dot={false} />
                     </LineChart>
@@ -1830,16 +1864,16 @@ function Dashboard({ session }: { session: Session }) {
                           <Pie data={reportCategories} dataKey="value" nameKey="name" innerRadius="68%" outerRadius="94%" paddingAngle={2} stroke="none" cornerRadius={6}>
                             {reportCategories.map((item, index) => <Cell key={item.name} fill={categoryColor(index)} />)}
                           </Pie>
-                          <Tooltip formatter={(value: number) => rp(value)} />
+                          <Tooltip formatter={(value: number) => displayRp(value)} />
                         </PieChart>
                       </ResponsiveContainer>
                       <div className="donut-mid"><b>{reportTopCategoryPercent}%</b><small>{reportTopCategory?.name}</small></div>
                     </div>
                     <div className="legend">
-                      {reportCategories.map((category, index) => <span key={category.name}><i style={{ background: categoryColor(index) }} />{category.name} · {rp(category.value)}</span>)}
+                      {reportCategories.map((category, index) => <span key={category.name}><i style={{ background: categoryColor(index) }} />{category.name} · {displayRp(category.value)}</span>)}
                     </div>
                   </div>
-                  <p className="report-largest">Pengeluaran terbesar: <strong>{reportTopCategory?.name}</strong> ({rp(reportTopCategory?.value ?? 0)})</p>
+                  <p className="report-largest">Pengeluaran terbesar: <strong>{reportTopCategory?.name}</strong> ({displayRp(reportTopCategory?.value ?? 0)})</p>
                 </>}
               </section>
 
@@ -1852,7 +1886,7 @@ function Dashboard({ session }: { session: Session }) {
                   return <div className="report-budget-row" key={row.category}>
                     <div className="budget-entry-heading">
                       <strong>{row.category}</strong>
-                      <strong>{rp(row.spent)} <small>/ {rp(row.budget)}</small></strong>
+                      <strong>{displayRp(row.spent)} <small>/ {displayRp(row.budget)}</small></strong>
                     </div>
                     <div className="bar" role="progressbar" aria-valuenow={Math.round(percent)} aria-valuemin={0} aria-valuemax={100} aria-label={`Realisasi anggaran ${row.category}`}>
                       <i className={over ? "over" : ""} style={{ width: `${percent}%` }} />
@@ -1964,6 +1998,22 @@ function Dashboard({ session }: { session: Session }) {
               </div>
               <button className="btn" disabled={savingWish}>{savingWish ? "Menyimpan..." : wishEditing ? "Simpan perubahan" : "Simpan ke Wish List"}</button>
             </form>
+          </section>
+        </div>}
+
+        {confirmation && <div className="confirmation-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setConfirmation(null); }}>
+          <section className="confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-message">
+            <div className="confirmation-mark" aria-hidden="true">!</div>
+            <h2 id="confirmation-title">Konfirmasi tindakan</h2>
+            <p id="confirmation-message">{confirmation.message}</p>
+            <div className="confirmation-actions">
+              <button type="button" className="btn ghost" onClick={() => setConfirmation(null)}>Batal</button>
+              <button type="button" className="btn confirmation-submit" onClick={() => {
+                const action = confirmation.onConfirm;
+                setConfirmation(null);
+                void action();
+              }}>Ya, lanjutkan</button>
+            </div>
           </section>
         </div>}
       </main>
