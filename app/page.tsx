@@ -1460,8 +1460,8 @@ function Dashboard({ session }: { session: Session }) {
 
         {nav === "beranda" && <div className="home-dashboard">
         <section className="home-balance">
-          <div className="balance-heading"><span>Saldo saat ini</span><small>{monthLabel(month)}</small>{balanceVisibilityButton}</div>
-          <strong>{displayRp(saldo)}</strong>
+          <div className="balance-heading"><span>Saldo saat ini</span><small>{monthLabel(month)}</small></div>
+          <div className="balance-amount-row"><strong>{displayRp(saldo)}</strong>{balanceVisibilityButton}</div>
           <span className="balance-caption">Ringkasan keuanganmu, diperbarui dari transaksi tercatat</span>
         </section>
 

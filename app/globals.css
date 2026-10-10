@@ -616,6 +616,9 @@ details.adder summary { cursor: pointer; color: var(--accent); font-weight: 600;
 .home-balance > strong { letter-spacing: -.045em; font-weight: 800; }
 .balance-heading { letter-spacing: .04em; }
 .balance-heading small { background: rgba(255, 255, 255, .12); backdrop-filter: blur(12px); }
+.home-balance .balance-heading small { margin-left: auto; }
+.balance-amount-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
+.balance-amount-row > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .balance-visibility-toggle { display: inline-grid; flex: 0 0 34px; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); color: var(--ink); cursor: pointer; }
 .balance-visibility-toggle svg { width: 18px; height: 18px; }
 .home-balance .balance-visibility-toggle { border-color: rgba(255,255,255,.24); background: rgba(255,255,255,.12); color: #fff; }
@@ -826,7 +829,7 @@ details.adder summary { cursor: pointer; color: var(--accent); font-weight: 600;
   animation: orb-float 12s ease-in-out infinite;
 }
 .home-balance > * { position: relative; }
-.home-balance > strong {
+.home-balance .balance-amount-row > strong {
   max-width: 100%;
   font-size: clamp(34px, 5.6vw, 58px);
   font-variant-numeric: tabular-nums;
@@ -916,7 +919,7 @@ details.adder summary { cursor: pointer; color: var(--accent); font-weight: 600;
   .home-balance .balance-heading { align-items: flex-start; }
   .home-balance .balance-heading > span { max-width: 130px; font-size: 13px; }
   .home-balance .balance-heading small { min-width: 0; padding: 7px 10px; font-size: 11px; }
-  .home-balance > strong { font-size: clamp(29px, 8vw, 40px); }
+  .home-balance .balance-amount-row > strong { font-size: clamp(29px, 8vw, 40px); }
   .balance-caption { max-width: 78%; }
   .home-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .total-tile { padding: 13px 11px; gap: 4px 9px; border-radius: 16px; }
