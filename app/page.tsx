@@ -12,7 +12,10 @@ type Wish = { id: string; name: string; target_amount: number; completed_at: str
 const DEFAULT_IN_CATS = ["Deposit", "Gaji", "Lainnya"];
 const DEFAULT_OUT_CATS = ["Jajan", "Jalan", "Kebutuhan", "Tanggungan", "Infaq", "Tabungan", "Investasi", "Lainnya"];
 const MONTH_NAMES = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-const COLORS = ["#35d5d0", "#7185ff", "#6570df", "#98a7ff", "#59b9e8", "#5361c9", "#9aa8c8"];
+const YEAR_OPTIONS = Array.from({ length: 101 }, (_, index) => String(2000 + index));
+const COLORS = ["#2ecfc4", "#7185ff", "#f2a65a", "#d87ac7", "#8bc85b", "#ed7186", "#48a9d8", "#b99045", "#9275d8", "#53b99a", "#ed8051", "#6d8fbd"];
+const categoryColor = (index: number) =>
+  COLORS[index] ?? `hsl(${(18 + (index - COLORS.length) * 31) % 360} 72% 61%)`;
 
 const rp = (n: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
@@ -64,6 +67,8 @@ function Icon({ n }: { n: string }) {
     list: "M7 3.75h8l4 4V20a1 1 0 01-1 1H7a2 2 0 01-2-2V5.75a2 2 0 012-2zM15 4v4h4M9 12h6M9 16h6M7.5 12h.01M7.5 16h.01",
     wallet: "M4.5 6.5h14a2 2 0 012 2v10a2 2 0 01-2 2h-13a2 2 0 01-2-2v-12a2 2 0 012-2zM3.5 9h17M15.5 14h2M6 6.5V5a2 2 0 012-2h10",
     chart: "M4 19.5h16M5.5 16V11M10 16V6M14.5 16V9M19 16V4M4.5 8.5l5-4 4.5 3 5-4",
+    "trend-up": "M3 17l6-6 4 4 8-9M15 6h6v6",
+    "trend-down": "M3 7l6 6 4-4 8 9M15 18h6v-6",
     search: "M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-4.3-4.3",
     budget: "M12 3.5l7 3v5.3c0 4.2-2.8 7.2-7 8.7-4.2-1.5-7-4.5-7-8.7V6.5l7-3zM12 8v7M14.2 9.5c-.5-.7-1.2-1-2.2-1-1.2 0-2 .6-2 1.5s.8 1.3 2 1.5 2 .6 2 1.5-.8 1.5-2 1.5c-.9 0-1.7-.3-2.2-1",
     category: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
@@ -86,12 +91,16 @@ function PeriodOptionPicker({
   options,
   className,
   onChange,
+  id,
+  disabled = false,
 }: {
   label: string;
   value: string;
   options: { label: string; value: string }[];
   className: string;
   onChange: (value: string) => void;
+  id?: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -123,15 +132,17 @@ function PeriodOptionPicker({
   };
 
   return (
-    <div className={`period-select ${className}`} ref={pickerRef}>
+    <div className={`period-select themed-select ${className}`} ref={pickerRef}>
       <button
         ref={triggerRef}
+        id={id}
         className="pick period-select-trigger"
         type="button"
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
+        disabled={disabled}
         onClick={() => setOpen((wasOpen) => !wasOpen)}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -329,8 +340,11 @@ function Dashboard({ session }: { session: Session }) {
   const [editId, setEditId] = useState<string | null>(null);
   const [walletId, setWalletId] = useState("");
   const [transactionWishId, setTransactionWishId] = useState("");
-  const [newWallet, setNewWallet] = useState<{ name: string; kind: keyof typeof KINDS }>({ name: "", kind: "cash" });
+  const [newWallet, setNewWallet] = useState<{ name: string; kind: keyof typeof KINDS | "investment" }>({ name: "", kind: "cash" });
+  const [walletEditing, setWalletEditing] = useState<Wallet | null>(null);
   const [nav, setNav] = useState("beranda");
+  const navHistory = useRef<string[]>([]);
+  const currentNav = useRef(nav);
   const [more, setMore] = useState(false);
   const [username, setUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -365,6 +379,25 @@ function Dashboard({ session }: { session: Session }) {
   const [walletToId, setWalletToId] = useState("");
   const [saving, setSaving] = useState(false);
 
+  function navigate(to: string) {
+    if (currentNav.current !== to) {
+      navHistory.current.push(currentNav.current);
+      window.history.pushState({ pocketFlowNav: to }, "", window.location.href);
+    }
+    currentNav.current = to;
+    setNav(to);
+  }
+
+  function goBack() {
+    if (navHistory.current.length) {
+      window.history.back();
+      return;
+    }
+    const previous = navHistory.current.pop() ?? "beranda";
+    currentNav.current = previous;
+    setNav(previous);
+  }
+
   useEffect(() => {
     setDarkMode(localStorage.getItem("keuangan-theme") === "dark");
   }, []);
@@ -373,6 +406,16 @@ function Dashboard({ session }: { session: Session }) {
     document.documentElement.dataset.theme = darkMode ? "dark" : "light";
     localStorage.setItem("keuangan-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const previous = navHistory.current.pop() ?? "beranda";
+      currentNav.current = previous;
+      setNav(previous);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     const updateGreeting = () => {
@@ -560,6 +603,11 @@ function Dashboard({ session }: { session: Session }) {
     }))
     .sort((a, b) => b.spent - a.spent || b.budget - a.budget);
 
+  function shiftReportPeriod(offset: number) {
+    const date = new Date(reportYear, reportMonth - 1 + (reportScale === "yearly" ? offset * 12 : offset), 1);
+    setMonth(`${date.getFullYear()}-${pad(date.getMonth() + 1)}`);
+  }
+
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     return q
@@ -582,6 +630,13 @@ function Dashboard({ session }: { session: Session }) {
     e.preventDefault();
     const amt = parseRupiah(amount);
     if (!amt) { setError("Isi nominal lebih dari 0."); return; }
+    if (type !== "transfer") {
+      const selectedWallet = activeWallets.find((wallet) => wallet.id === walletId);
+      if (!selectedWallet) {
+        setError("Pilih dompet aktif untuk transaksi ini.");
+        return;
+      }
+    }
     if (type === "transfer" && !activeWallets.some((wallet) => wallet.id === walletId)) {
       setError("Pilih dompet asal yang masih aktif.");
       return;
@@ -624,7 +679,7 @@ function Dashboard({ session }: { session: Session }) {
     setEditId(t.id); setType(t.type); setDate(t.date); setAmount(rupiahInput(String(t.amount)));
     setCategory(t.category); setNote(t.note ?? ""); setWalletId(t.wallet_id ?? ""); setWalletToId(t.wallet_to_id ?? "");
     setTransactionWishId(t.wishlist_id ?? "");
-    setNav("catat-transaksi");
+    navigate("catat-transaksi");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -634,9 +689,24 @@ function Dashboard({ session }: { session: Session }) {
       setError("Isi nama dompet.");
       return;
     }
-    const { error } = await supabase.from("wallets").insert({ name: newWallet.name.trim(), kind: newWallet.kind });
+    const query = walletEditing
+      ? supabase.from("wallets").update({ name: newWallet.name.trim(), kind: newWallet.kind }).eq("id", walletEditing.id)
+      : supabase.from("wallets").insert({ name: newWallet.name.trim(), kind: newWallet.kind });
+    const { error } = await query;
     if (error) setError(error.message);
-    else { setNewWallet({ ...newWallet, name: "" }); load(); }
+    else {
+      setNewWallet({ name: "", kind: "cash" });
+      setWalletEditing(null);
+      setError("");
+      await load();
+    }
+  }
+
+  function startEditWallet(wallet: Wallet) {
+    setWalletEditing(wallet);
+    setNewWallet({ name: wallet.name, kind: wallet.kind });
+    setError("");
+    document.getElementById("wallet-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   async function addExpenseCategory(e: React.FormEvent) {
@@ -943,6 +1013,16 @@ function Dashboard({ session }: { session: Session }) {
     .sort((a, b) => b.spent - a.spent || b.budget - a.budget);
   const budgetChartBudgetTotal = budgetChart.reduce((sum, item) => sum + item.budget, 0);
   const budgetChartSpentTotal = budgetChart.reduce((sum, item) => sum + item.spent, 0);
+  const renderBudgetCategories = (items: typeof budgetChart) => items.map((item) => {
+    const index = budgetChart.indexOf(item);
+    return (
+      <span className="budget-chart-category" key={item.name}>
+        <i style={{ background: categoryColor(index) }} />
+        <span>{item.name}</span>
+        <b>{rp(item.spent)} / {rp(item.budget)}</b>
+      </span>
+    );
+  });
   const selectedBudgetCategory = type === "out" ? category : undefined;
   const selectedCategoryBudget = selectedBudgetCategory
     ? budgets.find((b) => b.category === selectedBudgetCategory && b.month === Number(date.slice(5, 7)) && b.year === Number(date.slice(0, 4)))
@@ -1014,10 +1094,17 @@ function Dashboard({ session }: { session: Session }) {
         </div>
         {type !== "transfer" && <div className="field">
           <label htmlFor="cat">Kategori</label>
-          <select id="cat" value={category} onChange={(e) => setCategory(e.target.value)}>
-            {editId && !(type === "in" ? incomeCategories : expenseCategories).includes(category) && <option value={category}>{category}</option>}
-            {(type === "in" ? incomeCategories : expenseCategories).map((c) => <option key={c}>{c}</option>)}
-          </select>
+          <PeriodOptionPicker
+            id="cat"
+            label="Kategori"
+            className="transaction-category-select"
+            value={category}
+            options={[
+              ...(editId && !(type === "in" ? incomeCategories : expenseCategories).includes(category) ? [{ label: category, value: category }] : []),
+              ...(type === "in" ? incomeCategories : expenseCategories).map((item) => ({ label: item, value: item })),
+            ]}
+            onChange={setCategory}
+          />
           {type === "out" && selectedCategoryBudget && (
             <div className="category-budget-hint">
               <div className="bar" role="progressbar" aria-valuenow={Math.round(selectedCategoryPct)} aria-valuemin={0} aria-valuemax={100} aria-label={`Anggaran ${category}`}>
@@ -1030,12 +1117,20 @@ function Dashboard({ session }: { session: Session }) {
         </div>}
         {type === "out" && <div className="field">
           <label htmlFor="transaction-wishlist">Wish List (opsional)</label>
-          <select id="transaction-wishlist" value={transactionWishId} onChange={(e) => setTransactionWishId(e.target.value)}>
-            <option value="">Tidak terkait Wish List</option>
-            {wishes.filter((wish) => !wish.completed_at || wish.id === transactionWishId).map((wish) => (
-              <option key={wish.id} value={wish.id}>{wish.name} · Target {rp(wish.target_amount)}{wish.completed_at ? " (Selesai)" : ""}</option>
-            ))}
-          </select>
+          <PeriodOptionPicker
+            id="transaction-wishlist"
+            label="Wish List (opsional)"
+            className="transaction-wishlist-select"
+            value={transactionWishId}
+            options={[
+              { label: "Tidak terkait Wish List", value: "" },
+              ...wishes.filter((wish) => !wish.completed_at || wish.id === transactionWishId).map((wish) => ({
+                label: `${wish.name} · Target ${rp(wish.target_amount)}${wish.completed_at ? " (Selesai)" : ""}`,
+                value: wish.id,
+              })),
+            ]}
+            onChange={setTransactionWishId}
+          />
           {transactionWishId && <small className="category-budget-empty">Saat pengeluaran disimpan, Wish List akan ditandai selesai dengan nominal transaksi sebagai harga pembelian.</small>}
         </div>}
         <div className="field">
@@ -1045,39 +1140,52 @@ function Dashboard({ session }: { session: Session }) {
         {type === "transfer" ? <>
           <div className="field">
             <label htmlFor="wallet-from">Dompet asal</label>
-            <select
+            <PeriodOptionPicker
               id="wallet-from"
-              required
+              label="Pilih dompet asal"
+              className="wallet-from-select"
               value={walletId}
-              onChange={(event) => {
-                const sourceId = event.target.value;
+              options={[
+                { label: "Pilih dompet asal", value: "" },
+                ...activeWallets.map((wallet) => ({ label: wallet.name, value: wallet.id })),
+              ]}
+              onChange={(sourceId) => {
                 setWalletId(sourceId);
                 if (sourceId === walletToId) setWalletToId(activeWallets.find((wallet) => wallet.id !== sourceId)?.id ?? "");
               }}
-            >
-              <option value="">Pilih dompet asal</option>
-              {activeWallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}
-            </select>
+            />
           </div>
           <div className="field">
             <label htmlFor="wallet-to">Dompet tujuan</label>
-            <select
+            <PeriodOptionPicker
               id="wallet-to"
-              required
+              label="Pilih dompet tujuan"
+              className="wallet-to-select"
               value={walletToId}
-              onChange={(event) => setWalletToId(event.target.value)}
-            >
-              <option value="">Pilih dompet tujuan</option>
-              {activeWallets.filter((wallet) => wallet.id !== walletId).map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}
-            </select>
+              options={[
+                { label: "Pilih dompet tujuan", value: "" },
+                ...activeWallets.filter((wallet) => wallet.id !== walletId).map((wallet) => ({ label: wallet.name, value: wallet.id })),
+              ]}
+              onChange={setWalletToId}
+            />
           </div>
           {activeWallets.length < 2 && <p className="category-budget-empty transfer-wallet-hint">Buat minimal dua dompet aktif sebelum memindahkan dana.</p>}
         </> : <div className="field">
           <label htmlFor="wal">Dompet</label>
-          <select id="wal" value={walletId} onChange={(e) => setWalletId(e.target.value)}>
-            <option value="">Tanpa dompet</option>
-            {wallets.filter((w) => !w.archived_at || w.id === walletId).map((w) => <option key={w.id} value={w.id}>{w.name}{w.archived_at ? " (Dompet dihapus)" : ""}</option>)}
-          </select>
+          <PeriodOptionPicker
+            id="wal"
+            label="Dompet"
+            className="transaction-wallet-select"
+            value={walletId}
+            options={[
+              { label: "Pilih dompet", value: "" },
+              ...wallets.filter((wallet) => !wallet.archived_at || wallet.id === walletId).map((wallet) => ({
+                label: `${wallet.name}${wallet.archived_at ? " (Dompet dihapus)" : ""}`,
+                value: wallet.id,
+              })),
+            ]}
+            onChange={setWalletId}
+          />
         </div>}
         <button className="btn" disabled={saving || (type === "transfer" && activeWallets.length < 2)}>{saving ? "Menyimpan..." : editId ? "Simpan perubahan" : type === "transfer" ? "Simpan pindah dana" : "Simpan transaksi"}</button>
         {editId && <button type="button" className="btn ghost" style={{ marginTop: 8, width: "100%" }} onClick={resetForm}>Batal</button>}
@@ -1098,7 +1206,7 @@ function Dashboard({ session }: { session: Session }) {
               {group.label && <b className="navgroup-title">{group.label}</b>}
               <div className="navitems">
                 {group.items.map((item) => (
-                  <button key={item.id} type="button" aria-current={nav === item.id} onClick={() => setNav(item.id)}>
+                  <button key={item.id} type="button" aria-current={nav === item.id} onClick={() => navigate(item.id)}>
                     <Icon n={item.icon} /><span>{item.label}</span>
                   </button>
                 ))}
@@ -1111,7 +1219,7 @@ function Dashboard({ session }: { session: Session }) {
       <main key={nav} className={`main ${nav === "anggaran" ? "budget-page" : ""} ${nav === "catat-transaksi" ? "transaction-page" : ""} ${nav === "dompet" ? "wallet-page" : ""} ${nav === "wishlist" ? "wishlist-page" : ""} ${nav === "pengaturan" ? "category-page" : ""}`}>
         {nav === "anggaran" ? (
           <header className="budget-page-header">
-            <button className="budget-back" type="button" onClick={() => setNav("beranda")} aria-label="Kembali ke Beranda">
+            <button className="budget-back" type="button" onClick={goBack} aria-label="Kembali ke halaman sebelumnya">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12" /></svg>
             </button>
             <h1>Anggaran</h1>
@@ -1119,7 +1227,7 @@ function Dashboard({ session }: { session: Session }) {
           </header>
         ) : nav === "wishlist" ? (
           <header className="transaction-page-header wishlist-page-header">
-            <button className="budget-back" type="button" onClick={() => setNav("beranda")} aria-label="Kembali ke Beranda">
+            <button className="budget-back" type="button" onClick={goBack} aria-label="Kembali ke halaman sebelumnya">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12" /></svg>
             </button>
             <h1>Wish List</h1>
@@ -1127,7 +1235,7 @@ function Dashboard({ session }: { session: Session }) {
           </header>
         ) : nav === "catat-transaksi" || nav === "dompet" ? (
           <header className="transaction-page-header">
-            <button className="budget-back" type="button" onClick={() => setNav("beranda")} aria-label="Kembali ke Beranda">
+            <button className="budget-back" type="button" onClick={goBack} aria-label="Kembali ke halaman sebelumnya">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12" /></svg>
             </button>
             <h1>{nav === "catat-transaksi" ? "Catat Transaksi" : "Dompet"}</h1>
@@ -1164,7 +1272,7 @@ function Dashboard({ session }: { session: Session }) {
                   <small>Akun</small>
                   <strong>{uname}</strong>
                 </div>
-                <button type="button" onClick={() => { setPasswordMessage(""); setNav("ubah-password"); }}>
+                <button type="button" onClick={() => { setPasswordMessage(""); navigate("ubah-password"); }}>
                   <span>Kata sandi</span><small>Ubah kata sandi</small>
                 </button>
                 <button type="button" className="account-theme-toggle" onClick={() => setDarkMode((enabled) => !enabled)}>
@@ -1182,47 +1290,47 @@ function Dashboard({ session }: { session: Session }) {
 
         {nav === "anggaran" && <>
           <div className="budget-month-picker" aria-label="Pilih bulan anggaran">
-            <select className="pick" aria-label="Bulan anggaran" value={viewBudgetMonth} onChange={(e) => setViewBudgetMonth(Number(e.target.value))}>
-              {MONTH_NAMES.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}
-            </select>
-            <input className="pick budget-year" aria-label="Tahun anggaran" type="number" min="2000" max="2100" value={viewBudgetYear} onChange={(e) => setViewBudgetYear(Number(e.target.value))} />
+            <PeriodOptionPicker
+              label="Bulan anggaran"
+              className="budget-month-select"
+              value={String(viewBudgetMonth)}
+              options={MONTH_NAMES.map((name, index) => ({ label: name, value: String(index + 1) }))}
+              onChange={(selectedMonth) => setViewBudgetMonth(Number(selectedMonth))}
+            />
+            <PeriodOptionPicker
+              label="Tahun anggaran"
+              className="budget-year-select"
+              value={String(viewBudgetYear)}
+              options={YEAR_OPTIONS.map((year) => ({ label: year, value: year }))}
+              onChange={(year) => setViewBudgetYear(Number(year))}
+            />
           </div>
           <section className="budget-overview">
             <div className="budget-donut">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={budgetChart.filter((item) => item.spent > 0)} dataKey="spent" nameKey="name" innerRadius="70%" outerRadius="96%" paddingAngle={2} stroke="none">
+                  <Pie data={budgetChart.filter((item) => item.spent > 0)} dataKey="spent" nameKey="name" innerRadius="80%" outerRadius="94%" paddingAngle={2} stroke="none">
                     {budgetChart.filter((item) => item.spent > 0).map((item) => (
-                      <Cell key={item.name} fill={COLORS[budgetChart.findIndex((row) => row.name === item.name) % COLORS.length]} />
+                      <Cell key={item.name} fill={categoryColor(budgetChart.findIndex((row) => row.name === item.name))} />
                     ))}
                   </Pie>
-                  <Pie data={budgetChart.filter((item) => item.budget > 0)} dataKey="budget" nameKey="name" innerRadius="44%" outerRadius="66%" paddingAngle={2} stroke="none">
+                  <Pie data={budgetChart.filter((item) => item.budget > 0)} dataKey="budget" nameKey="name" innerRadius="62%" outerRadius="76%" paddingAngle={2} stroke="none">
                     {budgetChart.filter((item) => item.budget > 0).map((item) => (
-                      <Cell key={item.name} fill={COLORS[budgetChart.findIndex((row) => row.name === item.name) % COLORS.length]} fillOpacity={0.55} />
+                      <Cell key={item.name} fill={categoryColor(budgetChart.findIndex((row) => row.name === item.name))} fillOpacity={0.55} />
                     ))}
                   </Pie>
-                  {budgetChartSpentTotal === 0 && <Pie data={[{ name: "Tidak ada pengeluaran", value: 1 }]} dataKey="value" innerRadius="70%" outerRadius="96%" stroke="none"><Cell fill="#e9eaf2" /></Pie>}
-                  {budgetChartBudgetTotal === 0 && <Pie data={[{ name: "Belum ada anggaran", value: 1 }]} dataKey="value" innerRadius="44%" outerRadius="66%" stroke="none"><Cell fill="#d9dbe8" /></Pie>}
+                  {budgetChartSpentTotal === 0 && <Pie data={[{ name: "Tidak ada pengeluaran", value: 1 }]} dataKey="value" innerRadius="80%" outerRadius="94%" stroke="none"><Cell fill="#e9eaf2" /></Pie>}
+                  {budgetChartBudgetTotal === 0 && <Pie data={[{ name: "Belum ada anggaran", value: 1 }]} dataKey="value" innerRadius="62%" outerRadius="76%" stroke="none"><Cell fill="#d9dbe8" /></Pie>}
                   <Tooltip formatter={(value: number) => rp(value)} />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="budget-donut-center">
-                <strong>{rp(budgetChartSpentTotal)} / {rp(budgetChartBudgetTotal)}</strong>
-              </div>
             </div>
-            <div className="budget-chart-legend">
-              {budgetChart.length
-                ? <>
-                  <div className="budget-chart-legend-key"><span><i className="spent-key" />Pengeluaran</span><span><i className="budget-key" />Anggaran</span></div>
-                  {budgetChart.map((item, index) => (
-                    <span className="budget-chart-category" key={item.name}>
-                      <i style={{ background: COLORS[index % COLORS.length] }} />
-                      <span>{item.name}</span>
-                      <b>{rp(item.spent)} / {rp(item.budget)}</b>
-                    </span>
-                  ))}
-                </>
-                : <p className="empty">Belum ada anggaran atau pengeluaran pada bulan ini.</p>}
+            <div className="budget-chart-legend budget-chart-legend-left">{renderBudgetCategories(budgetChart.filter((_, index) => index % 2 === 0))}</div>
+            <div className="budget-chart-legend budget-chart-legend-right">{renderBudgetCategories(budgetChart.filter((_, index) => index % 2 === 1))}</div>
+            {budgetChart.length === 0 && <p className="empty budget-chart-empty">Belum ada anggaran atau pengeluaran pada bulan ini.</p>}
+            <div className="budget-chart-summary">
+              <div><span>Realisasi</span><strong>{rp(budgetChartSpentTotal)}</strong></div>
+              <div><span>Anggaran</span><strong>{rp(budgetChartBudgetTotal)}</strong></div>
             </div>
           </section>
 
@@ -1269,20 +1377,42 @@ function Dashboard({ session }: { session: Session }) {
               <form onSubmit={saveBudget}>
                 <div className="field">
                   <label htmlFor="budget-category">Kategori pengeluaran</label>
-                  <select id="budget-category" value={budgetCategory} disabled={!!budgetEditing} onChange={(e) => setBudgetCategory(e.target.value)}>
-                    {budgetEditing && !expenseCategories.includes(budgetEditing.category) && <option value={budgetEditing.category}>{budgetEditing.category}</option>}
-                    {expenseCategories.map((item) => <option key={item} value={item}>{item}</option>)}
-                  </select>
+                  <PeriodOptionPicker
+                    id="budget-category"
+                    label="Kategori pengeluaran"
+                    className="budget-category-select"
+                    value={budgetCategory}
+                    options={[
+                      ...(budgetEditing && !expenseCategories.includes(budgetEditing.category) ? [{ label: budgetEditing.category, value: budgetEditing.category }] : []),
+                      ...expenseCategories.map((item) => ({ label: item, value: item })),
+                    ]}
+                    disabled={!!budgetEditing}
+                    onChange={setBudgetCategory}
+                  />
                 </div>
                 <div className="field">
                   <label htmlFor="budget-month">Bulan</label>
-                  <select id="budget-month" value={budgetMonth} disabled={!!budgetEditing} onChange={(e) => setBudgetMonth(Number(e.target.value))}>
-                    {MONTH_NAMES.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}
-                  </select>
+                  <PeriodOptionPicker
+                    id="budget-month"
+                    label="Bulan anggaran"
+                    className="budget-form-month-select"
+                    value={String(budgetMonth)}
+                    options={MONTH_NAMES.map((name, index) => ({ label: name, value: String(index + 1) }))}
+                    disabled={!!budgetEditing}
+                    onChange={(selectedMonth) => setBudgetMonth(Number(selectedMonth))}
+                  />
                 </div>
                 <div className="field">
                   <label htmlFor="budget-year">Tahun</label>
-                  <input id="budget-year" type="number" min="2000" max="2100" required disabled={!!budgetEditing} value={budgetYear} onChange={(e) => setBudgetYear(Number(e.target.value))} />
+                  <PeriodOptionPicker
+                    id="budget-year"
+                    label="Tahun anggaran"
+                    className="budget-form-year-select"
+                    value={String(budgetYear)}
+                    options={YEAR_OPTIONS.map((year) => ({ label: year, value: year }))}
+                    disabled={!!budgetEditing}
+                    onChange={(year) => setBudgetYear(Number(year))}
+                  />
                 </div>
                 <div className="field">
                   <label htmlFor="budget-amount">Batas anggaran (Rp)</label>
@@ -1303,11 +1433,11 @@ function Dashboard({ session }: { session: Session }) {
 
         <div className="home-totals">
           <section className="total-tile income-tile">
-            <span className="total-icon">↗</span><span>Pemasukan bulan ini</span>
+            <span className="total-icon"><Icon n="trend-up" /></span><span>Pemasukan bulan ini</span>
             <strong>{rp(inM)}</strong>
           </section>
           <section className="total-tile expense-tile">
-            <span className="total-icon">↘</span><span>Pengeluaran bulan ini</span>
+            <span className="total-icon"><Icon n="trend-down" /></span><span>Pengeluaran bulan ini</span>
             <strong>{rp(outM)}</strong>
           </section>
           <section className="total-tile net-tile">
@@ -1317,16 +1447,16 @@ function Dashboard({ session }: { session: Session }) {
         </div>
 
         <nav className="home-shortcuts" aria-label="Pintasan">
-          <button type="button" onClick={() => setNav("anggaran")}><span className="shortcut-icon budget-shortcut"><Icon n="budget" /></span>Anggaran</button>
-          <button type="button" onClick={() => { setNav("catat-transaksi"); setEditId(null); }}><span className="shortcut-icon add-shortcut">+</span>Catat transaksi</button>
-          <button type="button" onClick={() => setNav("dompet")}><span className="shortcut-icon wallet-shortcut"><Icon n="wallet" /></span>Dompet</button>
-          <button type="button" onClick={() => setNav("wishlist")}><span className="shortcut-icon wishlist-shortcut"><Icon n="wishlist" /></span>Wish List</button>
+          <button type="button" onClick={() => navigate("anggaran")}><span className="shortcut-icon budget-shortcut"><Icon n="budget" /></span>Anggaran</button>
+          <button type="button" onClick={() => { setEditId(null); navigate("catat-transaksi"); }}><span className="shortcut-icon add-shortcut">+</span>Catat transaksi</button>
+          <button type="button" onClick={() => navigate("dompet")}><span className="shortcut-icon wallet-shortcut"><Icon n="wallet" /></span>Dompet</button>
+          <button type="button" onClick={() => navigate("wishlist")}><span className="shortcut-icon wishlist-shortcut"><Icon n="wishlist" /></span>Wish List</button>
         </nav>
 
         <section className="card home-chart">
           <div className="section-heading">
             <div><h2>Perkembangan arus kas</h2><small>Tren pemasukan dan pengeluaran</small></div>
-            <button type="button" onClick={() => setNav("statistik")}>Lihat statistik</button>
+            <button type="button" onClick={() => navigate("statistik")}>Lihat statistik</button>
           </div>
           {txs.length === 0 ? <p className="empty">Grafik akan muncul setelah ada transaksi.</p> : (
             <>
@@ -1364,7 +1494,7 @@ function Dashboard({ session }: { session: Session }) {
           <section className="card home-budget">
             <div className="section-heading">
               <h2>Anggaran berjalan</h2>
-              <button type="button" onClick={() => setNav("anggaran")}>Kelola</button>
+              <button type="button" onClick={() => navigate("anggaran")}>Kelola</button>
             </div>
             {budgetOverview.length === 0 ? (
               <p className="empty">Belum ada anggaran.</p>
@@ -1441,39 +1571,38 @@ function Dashboard({ session }: { session: Session }) {
               <div className="section-heading recent-heading">
                 <div><h2>Riwayat transaksi</h2><small>{monthLabel(month)}</small></div>
                 <div className="transaction-history-actions">
-                  <select
-                    className="pick transaction-filter-month"
-                    aria-label="Pilih bulan transaksi"
+                  <PeriodOptionPicker
+                    label="Pilih bulan transaksi"
+                    className="transaction-filter-month"
                     value={month.slice(5, 7)}
-                    onChange={(e) => setMonth(`${month.slice(0, 4)}-${e.target.value}`)}
-                  >
-                    {MONTH_NAMES.map((name, index) => <option key={name} value={pad(index + 1)}>{name}</option>)}
-                  </select>
-                  <select
-                    className="pick transaction-filter-year"
-                    aria-label="Pilih tahun transaksi"
+                    options={MONTH_NAMES.map((name, index) => ({ label: name, value: pad(index + 1) }))}
+                    onChange={(selectedMonth) => setMonth(`${month.slice(0, 4)}-${selectedMonth}`)}
+                  />
+                  <PeriodOptionPicker
+                    label="Pilih tahun transaksi"
+                    className="transaction-filter-year"
                     value={month.slice(0, 4)}
-                    onChange={(e) => setMonth(`${e.target.value}-${month.slice(5, 7)}`)}
-                  >
-                    {transactionYears.map((year) => <option key={year} value={year}>{year}</option>)}
-                  </select>
-                  <select
-                    className="pick transaction-filter-category"
-                    aria-label="Pilih kategori transaksi"
+                    options={transactionYears.map((year) => ({ label: String(year), value: String(year) }))}
+                    onChange={(selectedYear) => setMonth(`${selectedYear}-${month.slice(5, 7)}`)}
+                  />
+                  <PeriodOptionPicker
+                    label="Pilih kategori transaksi"
+                    className="transaction-filter-category"
                     value={transactionCategoryFilter}
-                    onChange={(e) => setTransactionCategoryFilter(e.target.value)}
-                  >
-                    <option value="all">Semua kategori</option>
-                    {transactionCategories.map((categoryName) => <option key={categoryName} value={categoryName}>{categoryName}</option>)}
-                  </select>
+                    options={[
+                      { label: "Semua kategori", value: "all" },
+                      ...transactionCategories.map((categoryName) => ({ label: categoryName, value: categoryName })),
+                    ]}
+                    onChange={setTransactionCategoryFilter}
+                  />
                   <label className="recent-search">
                     <span className="sr">Cari transaksi</span>
                     <input placeholder="Cari transaksi" value={search} onChange={(e) => setSearch(e.target.value)} />
                     <Icon n="search" />
                   </label>
-                  <button className="btn transaction-add-button" type="button" onClick={() => { resetForm(); setNav("catat-transaksi"); }}>+ Catat transaksi</button>
                 </div>
               </div>
+              <button className="btn transaction-add-button" type="button" onClick={() => { resetForm(); navigate("catat-transaksi"); }}>+ Catat transaksi</button>
               {loading ? (
                 <p className="empty">Memuat...</p>
               ) : transactionRows.length === 0 ? (
@@ -1509,13 +1638,37 @@ function Dashboard({ session }: { session: Session }) {
         <span>Perubahan bersih dari seluruh transaksi</span>
       </div>
       <h3>Dompet</h3>
-      {regularWalletEntries.length ? regularWalletEntries.map((w) => (
-        <article className="wallet-entry" key={w.id}>
-          <div><strong>{w.name}</strong><small>{w.kind}</small></div>
-          <b className={`wallet-entry-value${w.bal < 0 ? " negative" : ""}`}>{rp(w.bal)}</b>
-          <button type="button" onClick={() => { const wallet = wallets.find((item) => item.id === w.id); if (wallet) archiveWallet(wallet); }}>Hapus</button>
-        </article>
-      )) : <p className="empty">Belum ada dompet aktif.</p>}
+      {regularWalletEntries.length ? regularWalletEntries.map((w) => {
+        const walletTransactions = txs.filter((transaction) => transaction.wallet_id === w.id || transaction.wallet_to_id === w.id);
+        return <div className="wallet-record" key={w.id}>
+          <article className="wallet-entry">
+            <div><strong>{w.name}</strong><small>{w.kind}</small></div>
+            <b className={`wallet-entry-value${w.bal < 0 ? " negative" : ""}`}>{rp(w.bal)}</b>
+            <div className="wallet-entry-actions">
+              <button type="button" className="wallet-edit" onClick={() => { const wallet = wallets.find((item) => item.id === w.id); if (wallet) startEditWallet(wallet); }}>Ubah</button>
+              <button type="button" onClick={() => { const wallet = wallets.find((item) => item.id === w.id); if (wallet) archiveWallet(wallet); }}>Hapus</button>
+            </div>
+          </article>
+          <details className="wallet-transaction-history">
+            <summary>Riwayat transaksi ({walletTransactions.length})</summary>
+            {walletTransactions.length ? walletTransactions.map((transaction) => (
+              <div className="tx" key={transaction.id}>
+                <div>
+                  <div className="cat">{transactionCategory(transaction)}{transaction.note ? ` · ${transaction.note}` : ""}</div>
+                  <div className="meta">{dateLabel(transaction.date)}{transaction.type === "transfer" ? ` · ${transferWalletRoute(transaction)}` : ""}</div>
+                </div>
+                <div className={`amt ${transaction.type === "transfer" ? "" : transaction.type}`}>
+                  {transaction.type === "transfer" ? rp(transaction.amount) : `${transaction.type === "in" ? "+" : "-"}${rp(transaction.amount)}`}
+                </div>
+                <span className="transaction-actions">
+                  <button className="del" type="button" onClick={() => startEdit(transaction)}>Ubah</button>
+                  <button className="del" type="button" onClick={() => remove(transaction)}>Hapus</button>
+                </span>
+              </div>
+            )) : <p className="empty">Belum ada transaksi di dompet ini.</p>}
+          </details>
+        </div>;
+      }) : <p className="empty">Belum ada dompet aktif.</p>}
       {unassignedWalletBalance !== 0 && <div className="wallet-entry unassigned-wallet-entry"><div><strong>Tanpa dompet</strong><small>Transaksi yang belum dipasangkan ke dompet</small></div><b className={`wallet-entry-value${unassignedWalletBalance < 0 ? " negative" : ""}`}>{rp(unassignedWalletBalance)}</b></div>}
       {!!archivedRegularBalances.length && <>
         <h3 className="archived-wallet-title">Dompet dihapus</h3>
@@ -1531,9 +1684,9 @@ function Dashboard({ session }: { session: Session }) {
         ))}
       </>}
     </section>
-    <section className="card wallet-add-card">
+    <section className="card wallet-add-card" id="wallet-form">
       <div className="wallet-section-heading">
-        <div><h2>Tambah dompet</h2><small>Buat dompet untuk mengelompokkan transaksi.</small></div>
+        <div><h2>{walletEditing ? "Ubah dompet" : "Tambah dompet"}</h2><small>{walletEditing ? "Ubah nama atau jenis dompet. Saldo dihitung dari transaksi." : "Buat dompet untuk mengelompokkan transaksi."}</small></div>
       </div>
       <form onSubmit={addWallet}>
         <div className="field">
@@ -1542,11 +1695,20 @@ function Dashboard({ session }: { session: Session }) {
         </div>
         <div className="field">
           <label htmlFor="new-wallet-kind">Jenis dompet</label>
-          <select id="new-wallet-kind" value={newWallet.kind} onChange={(e) => setNewWallet({ ...newWallet, kind: e.target.value as keyof typeof KINDS })}>
-            {Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
+          <PeriodOptionPicker
+            id="new-wallet-kind"
+            label="Jenis dompet"
+            className="wallet-kind-select"
+            value={newWallet.kind}
+            options={[
+              ...Object.entries(KINDS).map(([kind, label]) => ({ label, value: kind })),
+              ...(walletEditing?.kind === "investment" ? [{ label: "Dompet", value: "investment" }] : []),
+            ]}
+            onChange={(kind) => setNewWallet({ ...newWallet, kind: kind as keyof typeof KINDS | "investment" })}
+          />
         </div>
-        <button className="btn">Tambah dompet</button>
+        <button className="btn">{walletEditing ? "Simpan perubahan" : "Tambah dompet"}</button>
+        {walletEditing && <button className="btn ghost wallet-edit-cancel" type="button" onClick={() => { setWalletEditing(null); setNewWallet({ name: "", kind: "cash" }); }}>Batal</button>}
       </form>
     </section>
   </>}
@@ -1605,12 +1767,20 @@ function Dashboard({ session }: { session: Session }) {
                 <button type="button" role="tab" aria-selected={reportScale === "yearly"} onClick={() => setReportScale("yearly")}>Tahunan</button>
               </div>
               <div className="report-date-controls">
-                {reportScale === "monthly" && <select className="pick" aria-label="Pilih bulan laporan" value={month.slice(5, 7)} onChange={(e) => setMonth(`${month.slice(0, 4)}-${e.target.value}`)}>
-                  {MONTH_NAMES.map((name, index) => <option key={name} value={pad(index + 1)}>{name}</option>)}
-                </select>}
-                <select className="pick" aria-label="Pilih tahun laporan" value={reportYear} onChange={(e) => setMonth(`${e.target.value}-${month.slice(5, 7)}`)}>
-                  {transactionYears.map((year) => <option key={year} value={year}>{year}</option>)}
-                </select>
+                {reportScale === "monthly" && <PeriodOptionPicker
+                  label="Pilih bulan laporan"
+                  className="report-month-select"
+                  value={month.slice(5, 7)}
+                  options={MONTH_NAMES.map((name, index) => ({ label: name, value: pad(index + 1) }))}
+                  onChange={(selectedMonth) => setMonth(`${month.slice(0, 4)}-${selectedMonth}`)}
+                />}
+                <PeriodOptionPicker
+                  label="Pilih tahun laporan"
+                  className="report-year-select"
+                  value={String(reportYear)}
+                  options={Array.from(new Set([...transactionYears, reportYear])).sort((a, b) => b - a).map((year) => ({ label: String(year), value: String(year) }))}
+                  onChange={(selectedYear) => setMonth(`${selectedYear}-${month.slice(5, 7)}`)}
+                />
               </div>
             </section>
 
@@ -1624,22 +1794,28 @@ function Dashboard({ session }: { session: Session }) {
             <section className="card">
               <div className="section-heading">
                 <div><h2>Arus kas</h2><small>{reportScale === "yearly" ? `Per bulan · ${reportYear}` : `Per hari · ${monthLabel(month)}`}</small></div>
+                <div className="report-period-nav" aria-label="Navigasi periode grafik">
+                  <button type="button" className="icon-button" aria-label={reportScale === "yearly" ? "Tahun sebelumnya" : "Bulan sebelumnya"} onClick={() => shiftReportPeriod(-1)}>‹</button>
+                  <button type="button" className="icon-button" aria-label={reportScale === "yearly" ? "Tahun berikutnya" : "Bulan berikutnya"} onClick={() => shiftReportPeriod(1)}>›</button>
+                </div>
               </div>
               <div className="legend row">
                 <span><i style={{ background: "var(--in)" }} />Pemasukan</span>
                 <span><i style={{ background: "var(--out)" }} />Pengeluaran</span>
               </div>
-              <div className="report-chart">
-                <ResponsiveContainer>
-                  <LineChart data={reportChart}>
-                    <CartesianGrid vertical={false} stroke="#dce5f5" />
-                    <XAxis dataKey="bulan" {...axis} interval={reportScale === "monthly" ? 4 : 0} />
-                    <YAxis {...axis} width={54} tickFormatter={(value: number) => `${Math.round(value / 1000)}rb`} />
-                    <Tooltip formatter={(value: number) => rp(value)} />
-                    <Line type="monotone" dataKey="Pemasukan" stroke="#35cfc8" strokeWidth={3} dot={false} />
-                    <Line type="monotone" dataKey="Pengeluaran" stroke="#7382f4" strokeWidth={3} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
+              <div className="report-chart-scroll" tabIndex={0} aria-label="Grafik arus kas, dapat digeser ke samping">
+                <div className="report-chart">
+                  <ResponsiveContainer>
+                    <LineChart data={reportChart}>
+                      <CartesianGrid vertical={false} stroke="#dce5f5" />
+                      <XAxis dataKey="bulan" {...axis} interval={reportScale === "monthly" ? 4 : 0} />
+                      <YAxis {...axis} width={54} tickFormatter={(value: number) => `${Math.round(value / 1000)}rb`} />
+                      <Tooltip formatter={(value: number) => rp(value)} />
+                      <Line type="monotone" dataKey="Pemasukan" stroke="#35cfc8" strokeWidth={3} dot={false} />
+                      <Line type="monotone" dataKey="Pengeluaran" stroke="#7382f4" strokeWidth={3} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </section>
 
@@ -1652,7 +1828,7 @@ function Dashboard({ session }: { session: Session }) {
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie data={reportCategories} dataKey="value" nameKey="name" innerRadius="68%" outerRadius="94%" paddingAngle={2} stroke="none" cornerRadius={6}>
-                            {reportCategories.map((item, index) => <Cell key={item.name} fill={COLORS[index % COLORS.length]} />)}
+                            {reportCategories.map((item, index) => <Cell key={item.name} fill={categoryColor(index)} />)}
                           </Pie>
                           <Tooltip formatter={(value: number) => rp(value)} />
                         </PieChart>
@@ -1660,7 +1836,7 @@ function Dashboard({ session }: { session: Session }) {
                       <div className="donut-mid"><b>{reportTopCategoryPercent}%</b><small>{reportTopCategory?.name}</small></div>
                     </div>
                     <div className="legend">
-                      {reportCategories.map((category, index) => <span key={category.name}><i style={{ background: COLORS[index % COLORS.length] }} />{category.name} · {rp(category.value)}</span>)}
+                      {reportCategories.map((category, index) => <span key={category.name}><i style={{ background: categoryColor(index) }} />{category.name} · {rp(category.value)}</span>)}
                     </div>
                   </div>
                   <p className="report-largest">Pengeluaran terbesar: <strong>{reportTopCategory?.name}</strong> ({rp(reportTopCategory?.value ?? 0)})</p>
@@ -1712,7 +1888,7 @@ function Dashboard({ session }: { session: Session }) {
               </div>
               <div className="category-manager-heading">
                 <div className={`category-manager-icon ${isIncome ? "income-category-icon" : "expense-category-icon"}`} aria-hidden="true">
-                  {isIncome ? "↗" : "↘"}
+                  <Icon n={isIncome ? "trend-up" : "trend-down"} />
                 </div>
                 <div className="category-manager-title">
                   <h2>Kategori {categoryLabel}</h2>
