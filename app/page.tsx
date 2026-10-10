@@ -346,10 +346,11 @@ function Dashboard({ session }: { session: Session }) {
   const [transactionWishId, setTransactionWishId] = useState("");
   const [newWallet, setNewWallet] = useState<{ name: string; kind: keyof typeof KINDS | "investment" }>({ name: "", kind: "cash" });
   const [walletEditing, setWalletEditing] = useState<Wallet | null>(null);
+  const [walletFormOpen, setWalletFormOpen] = useState(false);
+  const [showEmptyWalletChoices, setShowEmptyWalletChoices] = useState(false);
   const [nav, setNav] = useState("beranda");
   const navHistory = useRef<string[]>([]);
   const currentNav = useRef(nav);
-  const [more, setMore] = useState(false);
   const [username, setUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -547,6 +548,16 @@ function Dashboard({ session }: { session: Session }) {
   }, [txs, wallets]);
   const activeWalletBalances = walletBal.filter((w) => !w.archived);
   const activeWallets = wallets.filter((wallet) => !wallet.archived_at);
+  const emptyActiveWalletCount = activeWallets.filter((wallet) => (walletBal.find((balance) => balance.id === wallet.id)?.bal ?? 0) === 0).length;
+  const transactionWalletChoices = wallets.filter((wallet) => {
+    if (wallet.archived_at && wallet.id !== walletId && wallet.id !== walletToId) return false;
+    return showEmptyWalletChoices || wallet.id === walletId || wallet.id === walletToId ||
+      (walletBal.find((balance) => balance.id === wallet.id)?.bal ?? 0) !== 0;
+  });
+  const activeTransactionWalletChoices = activeWallets.filter((wallet) =>
+    showEmptyWalletChoices || wallet.id === walletId || wallet.id === walletToId ||
+    (walletBal.find((balance) => balance.id === wallet.id)?.bal ?? 0) !== 0,
+  );
   const archivedWalletBalances = walletBal.filter((w) => w.archived);
   const regularWalletBalances = activeWalletBalances;
   const archivedRegularBalances = archivedWalletBalances;
@@ -701,6 +712,7 @@ function Dashboard({ session }: { session: Session }) {
     else {
       setNewWallet({ name: "", kind: "cash" });
       setWalletEditing(null);
+      setWalletFormOpen(false);
       setError("");
       await load();
     }
@@ -710,7 +722,7 @@ function Dashboard({ session }: { session: Session }) {
     setWalletEditing(wallet);
     setNewWallet({ name: wallet.name, kind: wallet.kind });
     setError("");
-    document.getElementById("wallet-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setWalletFormOpen(true);
   }
 
   async function addExpenseCategory(e: React.FormEvent) {
@@ -1181,7 +1193,7 @@ function Dashboard({ session }: { session: Session }) {
               value={walletId}
               options={[
                 { label: "Pilih dompet asal", value: "" },
-                ...activeWallets.map((wallet) => ({ label: wallet.name, value: wallet.id })),
+                ...activeTransactionWalletChoices.map((wallet) => ({ label: wallet.name, value: wallet.id })),
               ]}
               onChange={(sourceId) => {
                 setWalletId(sourceId);
@@ -1198,12 +1210,15 @@ function Dashboard({ session }: { session: Session }) {
               value={walletToId}
               options={[
                 { label: "Pilih dompet tujuan", value: "" },
-                ...activeWallets.filter((wallet) => wallet.id !== walletId).map((wallet) => ({ label: wallet.name, value: wallet.id })),
+                ...activeTransactionWalletChoices.filter((wallet) => wallet.id !== walletId).map((wallet) => ({ label: wallet.name, value: wallet.id })),
               ]}
               onChange={setWalletToId}
             />
           </div>
           {activeWallets.length < 2 && <p className="category-budget-empty transfer-wallet-hint">Buat minimal dua dompet aktif sebelum memindahkan dana.</p>}
+          {emptyActiveWalletCount > 0 && <button type="button" className="linkbtn wallet-empty-toggle" onClick={() => setShowEmptyWalletChoices((show) => !show)}>
+            {showEmptyWalletChoices ? "Sembunyikan dompet kosong" : `Tampilkan dompet kosong (${emptyActiveWalletCount})`}
+          </button>}
         </> : <div className="field">
           <label htmlFor="wal">Dompet</label>
           <PeriodOptionPicker
@@ -1213,13 +1228,16 @@ function Dashboard({ session }: { session: Session }) {
             value={walletId}
             options={[
               { label: "Pilih dompet", value: "" },
-              ...wallets.filter((wallet) => !wallet.archived_at || wallet.id === walletId).map((wallet) => ({
+              ...transactionWalletChoices.map((wallet) => ({
                 label: `${wallet.name}${wallet.archived_at ? " (Dompet dihapus)" : ""}`,
                 value: wallet.id,
               })),
             ]}
             onChange={setWalletId}
           />
+          {emptyActiveWalletCount > 0 && <button type="button" className="linkbtn wallet-empty-toggle" onClick={() => setShowEmptyWalletChoices((show) => !show)}>
+            {showEmptyWalletChoices ? "Sembunyikan dompet kosong" : `Tampilkan dompet kosong (${emptyActiveWalletCount})`}
+          </button>}
         </div>}
         <button className="btn" disabled={saving || (type === "transfer" && activeWallets.length < 2)}>{saving ? "Menyimpan..." : editId ? "Simpan perubahan" : type === "transfer" ? "Simpan pindah dana" : "Simpan transaksi"}</button>
         {editId && <button type="button" className="btn ghost" style={{ marginTop: 8, width: "100%" }} onClick={resetForm}>Batal</button>}
@@ -1268,11 +1286,12 @@ function Dashboard({ session }: { session: Session }) {
             <button className="budget-add" type="button" onClick={() => { setWishEditing(null); setWishName(""); setWishAmount(""); setWishFormOpen(true); }} aria-label="Tambah Wish List">+</button>
           </header>
         ) : nav === "catat-transaksi" || nav === "dompet" ? (
-          <header className="transaction-page-header">
+          <header className={`transaction-page-header${nav === "dompet" ? " wallet-page-header" : ""}`}>
             <button className="budget-back" type="button" onClick={goBack} aria-label="Kembali ke halaman sebelumnya">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
             </button>
             <h1>{nav === "catat-transaksi" ? "Catat Transaksi" : "Dompet"}</h1>
+            {nav === "dompet" && <button className="budget-add" type="button" onClick={() => { setWalletEditing(null); setNewWallet({ name: "", kind: "cash" }); setWalletFormOpen(true); }} aria-label="Tambah dompet">+</button>}
           </header>
         ) : <header className="home-header">
           <div>
@@ -1566,7 +1585,7 @@ function Dashboard({ session }: { session: Session }) {
           ) : shown.length === 0 ? (
             <p className="empty">Belum ada transaksi untuk periode ini.</p>
           ) : (
-            shown.slice(0, more ? shown.length : 5).map((t) => (
+            shown.slice(0, 5).map((t) => (
               <div className="tx" key={t.id}>
                 <div>
                   <div className="cat">{transactionCategory(t)}{t.note ? ` · ${t.note}` : ""}</div>
@@ -1582,7 +1601,7 @@ function Dashboard({ session }: { session: Session }) {
               </div>
             ))
           )}
-          {shown.length > 5 && <button className="btn ghost see-all" onClick={() => setMore(!more)}>{more ? "Tampilkan lebih sedikit" : `Lihat semua (${shown.length})`}</button>}
+          {shown.length > 5 && <button className="btn ghost see-all" onClick={() => navigate("kelola-uang")}>{`Lihat semua (${shown.length})`}</button>}
         </section>
         </div>
         </div>}
@@ -1605,6 +1624,7 @@ function Dashboard({ session }: { session: Session }) {
               <div className="section-heading recent-heading">
                 <div><h2>Riwayat transaksi</h2><small>{monthLabel(month)}</small></div>
                 <div className="transaction-history-actions">
+                  <div className="transaction-filter-row">
                   <PeriodOptionPicker
                     label="Pilih bulan transaksi"
                     className="transaction-filter-month"
@@ -1619,6 +1639,8 @@ function Dashboard({ session }: { session: Session }) {
                     options={transactionYears.map((year) => ({ label: String(year), value: String(year) }))}
                     onChange={(selectedYear) => setMonth(`${selectedYear}-${month.slice(5, 7)}`)}
                   />
+                  </div>
+                  <div className="transaction-filter-row">
                   <PeriodOptionPicker
                     label="Pilih kategori transaksi"
                     className="transaction-filter-category"
@@ -1634,28 +1656,31 @@ function Dashboard({ session }: { session: Session }) {
                     <input placeholder="Cari transaksi" value={search} onChange={(e) => setSearch(e.target.value)} />
                     <Icon n="search" />
                   </label>
+                  </div>
                 </div>
               </div>
               <button className="btn transaction-add-button" type="button" onClick={() => { resetForm(); navigate("catat-transaksi"); }}>+ Catat transaksi</button>
-              {loading ? (
-                <p className="empty">Memuat...</p>
-              ) : transactionRows.length === 0 ? (
-                <p className="empty">{search || transactionCategoryFilter !== "all" ? "Tidak ada transaksi yang sesuai dengan pilihan." : "Belum ada transaksi untuk periode ini."}</p>
-              ) : transactionRows.map((t) => (
-                <div className="tx" key={t.id}>
-                  <div>
-                    <div className="cat">{transactionCategory(t)}{t.note ? ` · ${t.note}` : ""}</div>
-                    <div className="meta">{dateLabel(t.date)}{t.type === "transfer"
-                      ? ` · ${transferWalletRoute(t)}`
-                      : t.wallet_id ? ` · ${wallets.find((w) => w.id === t.wallet_id)?.name ?? ""}${wallets.find((w) => w.id === t.wallet_id)?.archived_at ? " (Dompet sudah dihapus)" : ""}` : ""}</div>
+              <div className="transaction-history-list">
+                {loading ? (
+                  <p className="empty">Memuat...</p>
+                ) : transactionRows.length === 0 ? (
+                  <p className="empty">{search || transactionCategoryFilter !== "all" ? "Tidak ada transaksi yang sesuai dengan pilihan." : "Belum ada transaksi untuk periode ini."}</p>
+                ) : transactionRows.map((t) => (
+                  <div className="tx" key={t.id}>
+                    <div>
+                      <div className="cat">{transactionCategory(t)}{t.note ? ` · ${t.note}` : ""}</div>
+                      <div className="meta">{dateLabel(t.date)}{t.type === "transfer"
+                        ? ` · ${transferWalletRoute(t)}`
+                        : t.wallet_id ? ` · ${wallets.find((w) => w.id === t.wallet_id)?.name ?? ""}${wallets.find((w) => w.id === t.wallet_id)?.archived_at ? " (Dompet sudah dihapus)" : ""}` : ""}</div>
+                    </div>
+                    <div className={`amt ${t.type === "transfer" ? "" : t.type}`}>{t.type === "transfer" ? displayRp(t.amount) : `${t.type === "in" ? "+" : "-"}${displayRp(t.amount)}`}</div>
+                    <span className="transaction-actions">
+                      <button className="del" onClick={() => startEdit(t)}>Ubah</button>
+                      <button className="del" onClick={() => remove(t)}>Hapus</button>
+                    </span>
                   </div>
-                  <div className={`amt ${t.type === "transfer" ? "" : t.type}`}>{t.type === "transfer" ? displayRp(t.amount) : `${t.type === "in" ? "+" : "-"}${displayRp(t.amount)}`}</div>
-                  <span className="transaction-actions">
-                    <button className="del" onClick={() => startEdit(t)}>Ubah</button>
-                    <button className="del" onClick={() => remove(t)}>Hapus</button>
-                  </span>
-                </div>
-              ))}
+                ))}
+              </div>
             </section>
           </div>}
 
@@ -1718,11 +1743,13 @@ function Dashboard({ session }: { session: Session }) {
         ))}
       </>}
     </section>
-    <section className="card wallet-add-card" id="wallet-form">
-      <div className="wallet-section-heading">
-        <div><h2>{walletEditing ? "Ubah dompet" : "Tambah dompet"}</h2><small>{walletEditing ? "Ubah nama atau jenis dompet. Saldo dihitung dari transaksi." : "Buat dompet untuk mengelompokkan transaksi."}</small></div>
+    {walletFormOpen && <div className="budget-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setWalletFormOpen(false); setWalletEditing(null); } }}>
+      <section className="budget-modal wallet-modal" role="dialog" aria-modal="true" aria-labelledby="wallet-modal-title">
+      <div className="section-heading">
+        <div><h2 id="wallet-modal-title">{walletEditing ? "Ubah dompet" : "Tambah dompet"}</h2><small>{walletEditing ? "Ubah nama atau jenis dompet. Saldo dihitung dari transaksi." : "Buat dompet untuk mengelompokkan transaksi."}</small></div>
+        <button type="button" className="modal-close" aria-label="Tutup" onClick={() => { setWalletFormOpen(false); setWalletEditing(null); }}>×</button>
       </div>
-      <form onSubmit={addWallet}>
+      <form className="wallet-add-card" onSubmit={addWallet}>
         <div className="field">
           <label htmlFor="new-wallet-name">Nama dompet</label>
           <input id="new-wallet-name" required placeholder="mis. BCA, GoPay, Tunai" value={newWallet.name} onChange={(e) => setNewWallet({ ...newWallet, name: e.target.value })} />
@@ -1742,9 +1769,10 @@ function Dashboard({ session }: { session: Session }) {
           />
         </div>
         <button className="btn">{walletEditing ? "Simpan perubahan" : "Tambah dompet"}</button>
-        {walletEditing && <button className="btn ghost wallet-edit-cancel" type="button" onClick={() => { setWalletEditing(null); setNewWallet({ name: "", kind: "cash" }); }}>Batal</button>}
+        {walletEditing && <button className="btn ghost wallet-edit-cancel" type="button" onClick={() => { setWalletEditing(null); setNewWallet({ name: "", kind: "cash" }); setWalletFormOpen(false); }}>Batal</button>}
       </form>
-    </section>
+      </section>
+    </div>}
   </>}
 
   {nav === "wishlist" && <>
