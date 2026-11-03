@@ -1,6 +1,10 @@
-const CACHE = "keuangan-v1";
+const CACHE = "keuangan-v2";
 self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener("activate", (e) => e.waitUntil(
+  caches.keys().then((keys) => Promise.all(
+    keys.filter((key) => key === "keuangan-v1").map((key) => caches.delete(key))
+  )).then(() => self.clients.claim())
+));
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET" || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
