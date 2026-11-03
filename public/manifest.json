@@ -3,8 +3,8 @@
   "short_name": "Pocket Flow",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#e8eefb",
-  "theme_color": "#3856a5",
+  "background_color": "#0e7a54",
+  "theme_color": "#0e7a54",
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
