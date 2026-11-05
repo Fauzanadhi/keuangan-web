@@ -22,6 +22,7 @@ body, body * { cursor: default; }
 button, a, summary, [role="button"], .period-options button { cursor: pointer; }
 input, textarea, [contenteditable="true"] { cursor: text; }
 select {
+  accent-color: var(--accent);
   color-scheme: light;
   appearance: none;
   padding-right: 32px !important;
@@ -37,6 +38,9 @@ select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a3d4ba' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }
 select option { background: var(--bg); color: var(--ink); }
+select option:checked { background: var(--accent); color: #ffffff; }
+input[type="date"] { accent-color: var(--accent); color-scheme: light; }
+:root[data-theme="dark"] input[type="date"] { color-scheme: dark; }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
@@ -224,7 +228,10 @@ select option { background: var(--bg); color: var(--ink); }
 .transaction-history-actions .transaction-filter-month,
 .transaction-history-actions .transaction-filter-year,
 .transaction-history-actions .transaction-filter-category,
+.transaction-history-actions .transaction-filter-subcategory,
+.transaction-history-actions .transaction-filter-date,
 .transaction-history-actions .recent-search { width: 100%; min-width: 0; }
+.transaction-filter-date input { width: 100%; min-height: 42px; padding: 7px 12px; border: 1px solid rgba(117, 200, 156, .25); border-radius: 13px; background: var(--surface); color: var(--ink); font: inherit; }
 .transaction-history-card .transaction-add-button { flex: 0 0 auto; }
 .transaction-history-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(78, 230, 173, .34) transparent; }
 .transaction-add-button { flex: 1 0 100%; width: 100%; margin: 14px 0 18px; white-space: nowrap; }
@@ -236,6 +243,10 @@ select option { background: var(--bg); color: var(--ink); }
 .report-controls .budget-period-tabs { margin: 0; }
 .report-date-controls { display: flex; justify-content: flex-end; gap: 10px; }
 .report-date-controls .themed-select { width: 140px; }
+.report-chart-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 14px 0 16px; }
+.report-range-field, .report-scale-field { display: grid; gap: 5px; min-width: 150px; color: var(--muted); font-size: 11px; font-weight: 650; }
+.report-range-field input, .report-scale-field select { width: 100%; min-height: 40px; padding: 7px 10px; border: 1px solid rgba(117, 200, 156, .25); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; }
+.report-range-reset { min-height: 40px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--head); color: var(--accent); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .report-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .report-summary .card { display: grid; gap: 6px; padding: 18px; background: var(--surface); }
 .report-summary span { color: var(--muted); }
@@ -244,11 +255,14 @@ select option { background: var(--bg); color: var(--ink); }
 .report-expense strong { color: var(--out); }
 .report-net strong, .report-saving strong { color: var(--accent); }
 .report-chart-scroll { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; scrollbar-color: rgba(78, 230, 173, .34) transparent; }
-.report-chart { min-width: 760px; height: 300px; }
+.report-chart { min-width: 1050px; height: 300px; }
 .report-period-nav { display: flex; gap: 8px; }
 .report-period-nav .icon-button { width: 38px; height: 38px; color: var(--ink); font-size: 24px; line-height: 1; }
 .report-analysis-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
 .report-analysis-grid > .card { min-width: 0; }
+.report-analysis-grid .report-donut { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+.report-analysis-grid .report-donut .donut-chart { width: min(100%, 230px); height: 230px; margin: 0 auto; }
+.report-analysis-grid .report-donut > .legend { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .report-largest { margin: 16px 0 0; color: var(--muted); }
 .report-budget-row { padding: 13px 0 3px; border-top: 1px solid var(--line); }
 .report-budget-row:first-of-type { margin-top: 12px; }
@@ -339,19 +353,37 @@ select option { background: var(--bg); color: var(--ink); }
 .category-add-form input { min-width: 0; min-height: 50px; border: 1px solid rgba(117, 200, 156, .24); border-radius: 14px; padding: 11px 15px; background: rgba(255, 255, 255,.6); box-shadow: 0 6px 18px rgba(48, 127, 89, .05); }
 .category-add-form .btn { width: auto; min-height: 50px; padding: 11px 18px; border-radius: 14px; white-space: nowrap; }
 .category-list { display: grid; gap: 9px; }
+.category-group { display: grid; gap: 7px; }
 .category-list-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 8px 10px 8px 16px; border: 1px solid var(--line); border-radius: 15px; background: rgba(255, 255, 255,.38); color: var(--ink); font-size: 14px; font-weight: 650; }
 .category-list-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; }
 .category-list-item button { display: grid; place-items: center; min-width: 34px; height: 34px; padding: 0 9px; border: 0; border-radius: 11px; line-height: 1; cursor: pointer; transition: background .16s ease, color .16s ease; }
-.category-list-item .category-edit { background: rgba(20, 133, 90, .1); color: var(--accent); font-size: 12px; font-weight: 700; }
-.category-list-item .category-edit:hover { background: var(--accent); color: #ffffff; }
-.category-list-item .category-delete { width: 34px; flex: 0 0 34px; padding: 0; background: rgba(224, 100, 138, .12); color: var(--out); font-size: 21px; }
-.category-list-item .category-delete:hover { background: var(--out); color: #ffffff; }
+.category-list-item .category-edit, .subcategory-list-item .category-edit { background: var(--grad); color: #ffffff; font-size: 12px; font-weight: 700; }
+.category-list-item .category-edit:hover, .subcategory-list-item .category-edit:hover { filter: brightness(1.08); }
+.category-list-item .category-delete, .subcategory-list-item .category-delete { width: 34px; flex: 0 0 34px; padding: 0; background: rgba(224, 100, 138, .12); color: var(--out); font-size: 21px; }
+.category-list-item .category-delete:hover, .subcategory-list-item .category-delete:hover { background: var(--out); color: #ffffff; }
 .category-list-item button:disabled { cursor: wait; opacity: .6; }
 .category-edit-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 7px; width: 100%; }
 .category-edit-form input { width: 100%; min-width: 0; min-height: 38px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; }
 .category-list-item .category-edit-form .category-save { background: var(--grad); color: #fff; font-size: 12px; font-weight: 700; }
 .category-list-item .category-edit-form .category-cancel { background: var(--head); color: var(--muted); font-size: 12px; font-weight: 700; }
 .category-empty { margin: 0; padding: 18px; border: 1px dashed var(--line); border-radius: 14px; color: var(--muted); text-align: center; }
+.subcategory-list { display: grid; gap: 6px; margin-left: 18px; padding-left: 12px; border-left: 2px solid rgba(79, 205, 157, .25); }
+.subcategory-list-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; padding: 5px 8px 5px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(99, 202, 151, .045); color: var(--ink); font-size: 13px; }
+.subcategory-list-item .category-list-actions { gap: 5px; }
+.subcategory-list-item .category-list-actions button { min-width: 32px; height: 30px; }
+.subcategory-add-button { justify-self: start; padding: 7px 11px; border: 1px dashed rgba(41, 164, 112, .4); border-radius: 10px; background: transparent; color: var(--accent); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.subcategory-add-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; }
+.subcategory-add-form input { min-width: 0; min-height: 36px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); }
+.subcategory-add-form button { padding: 6px 9px; border: 0; border-radius: 9px; background: var(--head); color: var(--accent); font-weight: 700; cursor: pointer; }
+.report-subcategory-list { display: grid; margin-top: 12px; }
+.report-subcategory-details { margin-top: 12px; }
+.report-subcategory-details > summary { width: fit-content; padding: 8px 12px; border: 1px solid rgba(41, 164, 112, .3); border-radius: 11px; background: rgba(99, 202, 151, .08); color: var(--accent); font-size: 12px; font-weight: 700; }
+.report-subcategory-details[open] > summary { margin-bottom: 4px; background: rgba(99, 202, 151, .14); }
+.report-subcategory-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+.report-subcategory-row > div { display: grid; gap: 3px; min-width: 0; }
+.report-subcategory-row strong { overflow-wrap: anywhere; font-size: 13px; }
+.report-subcategory-row small { color: var(--muted); overflow-wrap: anywhere; }
+.report-subcategory-row > b { flex: 0 0 auto; color: var(--out); font-size: 12px; text-align: right; }
 :root[data-theme="dark"] .category-count { background: rgba(255, 255, 255,.04); }
 :root[data-theme="dark"] .category-add-form input,
 :root[data-theme="dark"] .category-list-item { background: rgba(255, 255, 255,.035); }
@@ -587,7 +619,10 @@ details.adder summary { cursor: pointer; color: var(--accent); font-weight: 600;
   .report-period-nav .icon-button { width: 34px; height: 34px; }
   .report-page .legend.row { flex-wrap: wrap; gap: 8px 14px; font-size: 12px; }
   .report-chart-scroll { width: 100%; }
-  .report-chart { min-width: 560px; height: 230px; }
+  .report-chart { min-width: 1050px; height: 230px; }
+  .report-chart-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-range-field, .report-scale-field { min-width: 0; }
+  .report-scale-field, .report-range-reset { grid-column: 1 / -1; }
   .report-analysis-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .report-analysis-grid > .card { padding: 16px; }
   .report-analysis-grid .donut { grid-template-columns: minmax(0, 1fr); gap: 12px; }
@@ -1026,6 +1061,7 @@ details.adder summary { cursor: pointer; color: var(--accent); font-weight: 600;
 .transaction-history-actions .transaction-filter-month,
 .transaction-history-actions .transaction-filter-year,
 .transaction-history-actions .transaction-filter-category,
+.transaction-history-actions .transaction-filter-subcategory,
 .report-date-controls .themed-select,
 .budget-month-picker .budget-month-select,
 .budget-month-picker .budget-year-select { flex: 0 0 auto; }

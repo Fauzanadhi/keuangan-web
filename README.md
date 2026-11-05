@@ -10,6 +10,7 @@ Web rekap keuangan pribadi berdasarkan `Keuangan_pribadi.xlsx`.
 - Halaman Dompet dengan saldo per dompet
 - Catat transaksi dengan saldo per dompet dan sisa anggaran kategori
 - Wish List untuk menyimpan target barang, menandai barang selesai, serta melihat riwayat pembelian
+- Subkategori pengeluaran, filter transaksi per tanggal, dan grafik statistik dengan rentang serta skala yang dapat diatur
 
 ## Cara menjalankan
 1. Buat project di https://supabase.com, lalu buka **SQL Editor**, tempel isi `schema.sql`, dan Run.
@@ -38,9 +39,12 @@ Push ke GitHub, import ke Vercel, isi dua environment variable yang sama dengan 
 - **Anggaran:** buka pintasan Anggaran di Beranda, pilih kategori, bulan, dan tahun, lalu atur batasnya. Diagram membandingkan anggaran dan pengeluaran pada bulan/tahun yang dipilih.
 - **Catat transaksi:** gunakan pintasan Beranda untuk membuka formulir transaksi dan ringkasan saldo per dompet. Pengeluaran menampilkan sisa anggaran untuk kategori dan bulan transaksi; Pindah Dana mengurangi saldo dompet asal dan menambah dompet tujuan tanpa mengubah total pemasukan/pengeluaran.
 - **Kategori:** menu Kategori digunakan untuk menambah atau menghapus kategori pemasukan dan pengeluaran. Kategori Investasi adalah kategori pengeluaran biasa dan dapat dihapus.
-- **Dompet:** pintasan Dompet membuka saldo serta rincian semua dompet dalam satu daftar. Dompet dapat dihapus dari daftar aktif dengan mengarsipkannya; riwayatnya tetap ada dan menandai dompet yang telah dihapus.
+- **Subkategori pengeluaran:** jalankan `migrasi_subkategori.sql` sekali di Supabase SQL Editor untuk menambahkan subkategori di bawah kategori, misalnya Kebutuhan > Bensin. Subkategori bisa ditambah, diubah, atau dihapus dari menu Kategori. Subkategori dipakai saat mencatat transaksi dan pada rincian Statistik; anggaran tetap dihitung pada kategori induk. Penghapusan subkategori tidak mengubah rincian transaksi lama.
+- **Riwayat transaksi:** pilih satu tanggal, kategori, dan subkategori untuk menyaring transaksi. Pemilihan tanggal menggunakan format MM/DD/YYYY.
+- **Grafik Statistik:** pilihan **Monthly** menampilkan filter rentang tanggal, sedangkan **Annual** menyembunyikannya. Rentang tanggal membatasi grafik saja, bukan rekap total. Skala akar kuadrat meredam dampak transaksi besar agar transaksi lain tetap mudah dibaca; seluruh label tanggal tetap tersedia dan grafik dapat digeser ke samping.
+- **Dompet:** pintasan Dompet membuka saldo serta rincian semua dompet dalam satu daftar. Pada formulir transaksi, dompet dengan saldo nol disembunyikan dari ringkasan awal dan dapat ditampilkan lewat tombol. Dompet dapat dihapus dari daftar aktif dengan mengarsipkannya; riwayatnya tetap ada dan menandai dompet yang telah dihapus.
 - **Wish List:** simpan target barang, tandai selesai secara manual, atau pilih Wish List opsional saat mencatat pengeluaran. Pengeluaran terkait otomatis menyelesaikan Wish List dan mencatat nominal transaksi sebagai harga pembelian; barang selesai tetap terlihat di riwayat.
-- **Ubah transaksi:** tombol "Ubah" di daftar transaksi. Gunakan ini untuk mengisi dompet pada data lama. Transfer lama tetap tercatat dan memengaruhi saldo dompet, tetapi hanya dapat dilihat atau dihapus.
+- **Ubah transaksi:** tombol "Ubah" di daftar transaksi memperbarui transaksi yang sama, bukan membuat transaksi baru. Gunakan ini untuk mengisi dompet pada data lama. Transfer lama tetap tercatat dan memengaruhi saldo dompet, tetapi hanya dapat dilihat atau dihapus.
 - Data hasil import Excel masuk ke "Tanpa dompet".
 - **Akun:** ubah kata sandi dari menu akun; kata sandi saat ini diminta untuk verifikasi.
 - **PWA:** harus lewat HTTPS, jadi deploy dulu (Vercel), lalu buka di Chrome HP dan pilih "Tambahkan ke layar utama".
